@@ -81,10 +81,35 @@ jobs:
         run: |
           Write-Host "Starting UWP build..."
 
+          # Detect the Release platforms declared by the solution.
+          $solutionText = Get-Content -LiteralPath $env:SOLUTION_PATH -Raw
+          $releasePlatforms = [regex]::Matches(
+            $solutionText,
+            '(?m)^\s*Release\|([^=\r\n]+)\s*=\s*Release\|'
+          ) | ForEach-Object { $_.Groups[1].Value.Trim() } | Select-Object -Unique
+
+          if (-not $releasePlatforms) {
+            throw "No Release solution configurations were found in $env:SOLUTION_PATH"
+          }
+
+          Write-Host "Available Release platforms: $($releasePlatforms -join ', ')"
+
+          if ($releasePlatforms -contains "x86") {
+            $buildPlatform = "x86"
+          } elseif ($releasePlatforms -contains "Any CPU") {
+            $buildPlatform = "Any CPU"
+          } elseif ($releasePlatforms -contains "x64") {
+            $buildPlatform = "x64"
+          } else {
+            $buildPlatform = $releasePlatforms[0]
+          }
+
+          Write-Host "Building Release|$buildPlatform"
+
           msbuild "$env:SOLUTION_PATH" `
             /m `
             /p:Configuration=Release `
-            /p:Platform=x86 `
+            /p:Platform="$buildPlatform" `
             /p:AppxPackage=true `
             /p:GenerateAppxPackageOnBuild=true `
             /p:AppxPackageSigningEnabled=false `

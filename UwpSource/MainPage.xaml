@@ -8,10 +8,7 @@
 
     <Grid x:Name="InputSurface"
           Padding="34"
-          Background="{StaticResource AppBackgroundBrush}"
-          PointerMoved="InputSurface_PointerMoved"
-          PointerPressed="InputSurface_PointerPressed"
-          PointerReleased="InputSurface_PointerReleased">
+          Background="{StaticResource AppBackgroundBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -60,6 +57,8 @@
                         Click="NavHome_Click" AutomationProperties.Name="Home" />
                 <Button x:Name="NavInputButton" Content="INPUT TEST" Style="{StaticResource NavButtonStyle}"
                         Click="NavInput_Click" AutomationProperties.Name="Input test" />
+                <Button x:Name="NavControlsButton" Content="CONTROLS" Style="{StaticResource NavButtonStyle}"
+                        Click="NavControls_Click" AutomationProperties.Name="Controls" />
                 <Button x:Name="NavAboutButton" Content="ABOUT" Style="{StaticResource NavButtonStyle}"
                         Click="NavAbout_Click" AutomationProperties.Name="About" />
 
@@ -146,7 +145,7 @@
                                        FontSize="13" FontWeight="Bold" />
                             <TextBlock Text="Check every device." Foreground="{StaticResource MainTextBrush}"
                                        FontSize="32" FontWeight="Bold" />
-                            <TextBlock Text="Connect a controller or move your mouse and keyboard to see live readings."
+                            <TextBlock Text="Keyboard actions and mouse movement, buttons and wheel can be tested here."
                                        Foreground="{StaticResource MutedTextBrush}" FontSize="16"
                                        TextWrapping="Wrap" />
                         </StackPanel>
@@ -169,9 +168,13 @@
                                                Foreground="{StaticResource MutedTextBrush}" FontSize="14" />
                                 </StackPanel>
                             </Border>
-                            <Border Grid.Column="1" Background="{StaticResource PanelBrush}"
+                            <Border x:Name="MouseCaptureSurface" Grid.Column="1" Background="{StaticResource PanelBrush}"
                                     BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="1"
-                                    CornerRadius="16" Padding="20">
+                                    CornerRadius="16" Padding="20" MinHeight="150"
+                                    PointerMoved="InputSurface_PointerMoved"
+                                    PointerPressed="InputSurface_PointerPressed"
+                                    PointerReleased="InputSurface_PointerReleased"
+                                    PointerWheelChanged="InputSurface_PointerWheelChanged">
                                 <StackPanel Spacing="9">
                                     <TextBlock Text="MOUSE / POINTER" Foreground="{StaticResource AccentBrush}"
                                                FontSize="12" FontWeight="Bold" />
@@ -180,6 +183,9 @@
                                                FontWeight="SemiBold" TextWrapping="Wrap" />
                                     <TextBlock x:Name="MouseStateText" Text="Mouse: waiting"
                                                Foreground="{StaticResource MutedTextBrush}" FontSize="14" />
+                                    <TextBlock x:Name="MouseDeltaText" Text="Move the mouse here to test look delta."
+                                               Foreground="{StaticResource MutedTextBrush}" FontSize="13"
+                                               TextWrapping="Wrap" />
                                 </StackPanel>
                             </Border>
                         </Grid>
@@ -209,6 +215,72 @@
                     </StackPanel>
                 </ScrollViewer>
 
+                <!-- Custom keyboard and mouse controls -->
+                <ScrollViewer x:Name="ControlsPanel" Visibility="Collapsed"
+                              VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Spacing="16" Padding="0,0,8,8">
+                        <StackPanel Spacing="6" Margin="0,0,0,4">
+                            <TextBlock Text="CONTROLS" Foreground="{StaticResource AccentBrush}"
+                                       FontSize="13" FontWeight="Bold" />
+                            <TextBlock Text="Keyboard and mouse setup." Foreground="{StaticResource MainTextBrush}"
+                                       FontSize="32" FontWeight="Bold" />
+                            <TextBlock Text="Horizon-style defaults. Changes are saved on this device."
+                                       Foreground="{StaticResource MutedTextBrush}" FontSize="16"
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
+
+                        <Border Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource PanelBorderBrush}"
+                                BorderThickness="1" CornerRadius="16" Padding="22">
+                            <StackPanel Spacing="12">
+                                <TextBlock Text="MOUSE" Foreground="{StaticResource AccentBrush}"
+                                           FontSize="12" FontWeight="Bold" />
+                                <TextBlock Text="Left click: attack / break    Right click: use / place    Middle click: pick block"
+                                           Foreground="{StaticResource MainTextBrush}" FontSize="16"
+                                           TextWrapping="Wrap" />
+                                <TextBlock Text="Mouse sensitivity" Foreground="{StaticResource MainTextBrush}"
+                                           FontSize="15" FontWeight="SemiBold" />
+                                <Slider x:Name="MouseSensitivitySlider" Minimum="10" Maximum="200"
+                                        Value="100" StepFrequency="5" ValueChanged="MouseSensitivitySlider_ValueChanged" />
+                                <TextBlock x:Name="MouseSensitivityValueText" Text="100%"
+                                           Foreground="{StaticResource MutedTextBrush}" FontSize="13" />
+                                <CheckBox x:Name="InvertMouseYCheckBox" Content="Invert mouse Y"
+                                          Foreground="{StaticResource MainTextBrush}"
+                                          Checked="InvertMouseYCheckBox_Changed"
+                                          Unchecked="InvertMouseYCheckBox_Changed" />
+                                <StackPanel x:Name="MouseBindingsPanel" Spacing="8" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource PanelBorderBrush}"
+                                BorderThickness="1" CornerRadius="16" Padding="22">
+                            <StackPanel Spacing="12">
+                                <TextBlock Text="KEY BINDINGS" Foreground="{StaticResource AccentBrush}"
+                                           FontSize="12" FontWeight="Bold" />
+                                <TextBlock Text="Choose a new key for each action. F1–F12 are available in the selectors."
+                                           Foreground="{StaticResource MutedTextBrush}" FontSize="14"
+                                           TextWrapping="Wrap" />
+                                <StackPanel x:Name="KeyBindingsPanel" Spacing="7" />
+                                <Button Content="RESET ALL CONTROLS" Style="{StaticResource NavButtonStyle}"
+                                        HorizontalAlignment="Left" Click="ResetBindings_Click" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Background="{StaticResource PanelAltBrush}" BorderBrush="{StaticResource PanelBorderBrush}"
+                                BorderThickness="1" CornerRadius="16" Padding="22">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="INPUT STATUS" Foreground="{StaticResource AccentBrush}"
+                                           FontSize="12" FontWeight="Bold" />
+                                <TextBlock x:Name="LastInputActionText" Text="Press a mapped key to test it."
+                                           Foreground="{StaticResource MainTextBrush}" FontSize="17"
+                                           TextWrapping="Wrap" />
+                                <TextBlock Text="These controls are saved and the UWP shell can read them. They will drive Minecraft only after the Horizon game engine is integrated."
+                                           Foreground="{StaticResource MutedTextBrush}" FontSize="13"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+
                 <!-- About -->
                 <Grid x:Name="AboutPanel" Visibility="Collapsed">
                     <StackPanel Spacing="16">
@@ -230,6 +302,8 @@
                                 <TextBlock Text="• Live gamepad buttons, sticks and trigger readings"
                                            Foreground="{StaticResource MainTextBrush}" FontSize="17" />
                                 <TextBlock Text="• Keyboard and mouse input diagnostics"
+                                           Foreground="{StaticResource MainTextBrush}" FontSize="17" />
+                                <TextBlock Text="• Editable key bindings, F1–F12 and saved mouse sensitivity"
                                            Foreground="{StaticResource MainTextBrush}" FontSize="17" />
                             </StackPanel>
                         </Border>

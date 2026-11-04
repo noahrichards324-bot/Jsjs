@@ -21,7 +21,8 @@ No changes are made to the upstream project or its sign-in/entitlement logic in 
 
 ## Port stages
 
-- [ ] UWP target smoke test and actual-client compile probe
+- [x] UWP target smoke test and actual-client compile probe (CI run 41936552524 passed)
+- [ ] Link the actual Horizon client into a UWP native DLL (build probe added; awaiting result)
 - [ ] UWP host/window lifecycle and render-surface adapter
 - [ ] Keyboard, mouse capture/relative look and controller bridge into Horizon input
 - [ ] UWP app-storage path and file-picker adaptation

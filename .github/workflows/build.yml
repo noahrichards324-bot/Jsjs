@@ -305,12 +305,14 @@ jobs:
 
           Write-Host "Available Release platforms: $($releasePlatforms -join ', ')"
 
-          if ($releasePlatforms -contains "x86") {
+          # Xbox Series S is x64. Prefer the x64 package whenever the
+          # solution provides it; only fall back for solutions without x64.
+          if ($releasePlatforms -contains "x64") {
+            $buildPlatform = "x64"
+          } elseif ($releasePlatforms -contains "x86") {
             $buildPlatform = "x86"
           } elseif ($releasePlatforms -contains "Any CPU") {
             $buildPlatform = "Any CPU"
-          } elseif ($releasePlatforms -contains "x64") {
-            $buildPlatform = "x64"
           } else {
             $buildPlatform = $releasePlatforms[0]
           }

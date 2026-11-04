@@ -82,6 +82,27 @@ jobs:
           "SOLUTION_PATH=$($solution.FullName)" >> $env:GITHUB_ENV
           "SOURCE_ROOT=$sourceRoot" >> $env:GITHUB_ENV
 
+      - name: Remove incompatible Xamarin.Forms XAML attribute
+        shell: pwsh
+        run: |
+          $projectDir = Split-Path -Parent $env:SOLUTION_PATH
+          $assemblyInfo = Join-Path $projectDir "Properties/AssemblyInfo.cs"
+
+          if (-not (Test-Path -LiteralPath $assemblyInfo)) {
+            throw "AssemblyInfo.cs was not found: $assemblyInfo"
+          }
+
+          $source = Get-Content -LiteralPath $assemblyInfo -Raw
+          $pattern = '(?m)^\s*\[assembly:\s*XamlCompilation\([^\r\n]*\)\]\s*\r?\n?'
+          $updated = [regex]::Replace($source, $pattern, '')
+
+          if ($updated -eq $source) {
+            Write-Host "No Xamarin.Forms XamlCompilation assembly attribute was present."
+          } else {
+            Set-Content -LiteralPath $assemblyInfo -Value $updated -NoNewline -Encoding utf8
+            Write-Host "Removed the unsupported XamlCompilation assembly attribute."
+          }
+
       - name: Restore NuGet packages
         shell: pwsh
         run: |

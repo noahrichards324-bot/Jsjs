@@ -82,6 +82,18 @@ jobs:
           "SOLUTION_PATH=$($solution.FullName)" >> $env:GITHUB_ENV
           "SOURCE_ROOT=$sourceRoot" >> $env:GITHUB_ENV
 
+      - name: Inspect starter page source
+        shell: pwsh
+        run: |
+          $projectDir = Split-Path -Parent $env:SOLUTION_PATH
+          foreach ($relative in @("MainPage.xaml", "MainPage.xaml.cs", "App.xaml", "App.xaml.cs", "HorizonXboxStarter.csproj")) {
+            $path = Join-Path $projectDir $relative
+            if (Test-Path -LiteralPath $path) {
+              Write-Host "===== SOURCE: $relative ====="
+              Get-Content -LiteralPath $path -Raw
+            }
+          }
+
       - name: Remove incompatible Xamarin.Forms XAML attribute
         shell: pwsh
         run: |

@@ -1,0 +1,264 @@
+<Page
+    x:Class="HorizonXboxStarter.MainPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Background="{StaticResource AppBackgroundBrush}"
+    Loaded="Page_Loaded"
+    Unloaded="Page_Unloaded">
+
+    <Grid x:Name="InputSurface"
+          Padding="34"
+          Background="{StaticResource AppBackgroundBrush}"
+          PointerMoved="InputSurface_PointerMoved"
+          PointerPressed="InputSurface_PointerPressed"
+          PointerReleased="InputSurface_PointerReleased">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Top bar -->
+        <Grid Grid.Row="0" Margin="0,0,0,24">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Orientation="Horizontal" Spacing="14" VerticalAlignment="Center">
+                <Border Width="48" Height="48" CornerRadius="12" Background="{StaticResource AccentBrush}">
+                    <TextBlock Text="H" Foreground="#091610" FontSize="29" FontWeight="Bold"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+                <StackPanel Spacing="1" VerticalAlignment="Center">
+                    <TextBlock Text="HORIZON" Foreground="{StaticResource MainTextBrush}"
+                               FontSize="24" FontWeight="Bold" />
+                    <TextBlock Text="XBOX EDITION  /  DEVELOPMENT BUILD"
+                               Foreground="{StaticResource MutedTextBrush}" FontSize="12"
+                               FontWeight="SemiBold" />
+                </StackPanel>
+            </StackPanel>
+            <Border Grid.Column="1" Padding="16,10" CornerRadius="10"
+                    Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource PanelBorderBrush}"
+                    BorderThickness="1" VerticalAlignment="Center">
+                <TextBlock x:Name="HeaderStatusText" Text="STARTER SHELL"
+                           Foreground="{StaticResource AccentBrush}" FontSize="13" FontWeight="Bold" />
+            </Border>
+        </Grid>
+
+        <!-- Main layout -->
+        <Grid Grid.Row="1" ColumnSpacing="22">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="238" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Navigation rail -->
+            <StackPanel Grid.Column="0" Spacing="10">
+                <TextBlock Text="MENU" Foreground="{StaticResource MutedTextBrush}"
+                           FontSize="12" FontWeight="Bold" Margin="6,0,0,4" />
+                <Button x:Name="NavHomeButton" Content="HOME" Style="{StaticResource NavButtonStyle}"
+                        Click="NavHome_Click" AutomationProperties.Name="Home" />
+                <Button x:Name="NavInputButton" Content="INPUT TEST" Style="{StaticResource NavButtonStyle}"
+                        Click="NavInput_Click" AutomationProperties.Name="Input test" />
+                <Button x:Name="NavAboutButton" Content="ABOUT" Style="{StaticResource NavButtonStyle}"
+                        Click="NavAbout_Click" AutomationProperties.Name="About" />
+
+                <Border Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource PanelBorderBrush}"
+                        BorderThickness="1" CornerRadius="14" Padding="16" Margin="0,18,0,0">
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="INPUT SUPPORT" Foreground="{StaticResource AccentBrush}"
+                                   FontSize="12" FontWeight="Bold" />
+                        <TextBlock Text="Keyboard and mouse" Foreground="{StaticResource MainTextBrush}"
+                                   FontSize="15" />
+                        <TextBlock Text="Xbox controller" Foreground="{StaticResource MainTextBrush}"
+                                   FontSize="15" />
+                        <TextBlock Text="Controller-friendly focus navigation"
+                                   Foreground="{StaticResource MutedTextBrush}" FontSize="12"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
+            <!-- Page content -->
+            <Grid Grid.Column="1">
+                <!-- Home -->
+                <Grid x:Name="HomePanel">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="1.55*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border Grid.Column="0" Background="{StaticResource PanelBrush}"
+                            BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="1"
+                            CornerRadius="18" Padding="30" Margin="0,0,14,0">
+                        <StackPanel Spacing="18" VerticalAlignment="Center">
+                            <TextBlock Text="BUILT FOR THE BIG SCREEN" Foreground="{StaticResource AccentBrush}"
+                                       FontSize="13" FontWeight="Bold" />
+                            <TextBlock Text="Your Horizon hub." Foreground="{StaticResource MainTextBrush}"
+                                       FontSize="38" FontWeight="Bold" />
+                            <TextBlock Text="A redesigned Xbox-friendly app shell with controller navigation and live keyboard, mouse and gamepad input testing."
+                                       Foreground="{StaticResource MutedTextBrush}" FontSize="18"
+                                       TextWrapping="Wrap" MaxWidth="620" />
+                            <Button x:Name="OpenInputButton" Content="OPEN INPUT TEST"
+                                    Style="{StaticResource PrimaryButtonStyle}" HorizontalAlignment="Left"
+                                    Click="NavInput_Click" />
+                            <TextBlock Text="Use the D-pad or left stick to move between buttons. Press A to select. Press B or Escape to return home."
+                                       Foreground="{StaticResource MutedTextBrush}" FontSize="14"
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Border>
+
+                    <StackPanel Grid.Column="1" Spacing="14">
+                        <Border Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource PanelBorderBrush}"
+                                BorderThickness="1" CornerRadius="18" Padding="22">
+                            <StackPanel Spacing="10">
+                                <TextBlock Text="APP STATUS" Foreground="{StaticResource AccentBrush}"
+                                           FontSize="12" FontWeight="Bold" />
+                                <TextBlock x:Name="AppStatusText" Text="UWP shell is running."
+                                           Foreground="{StaticResource MainTextBrush}" FontSize="21"
+                                           FontWeight="SemiBold" TextWrapping="Wrap" />
+                                <TextBlock Text="The app interface is ready for the next integration stage."
+                                           Foreground="{StaticResource MutedTextBrush}" FontSize="14"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Background="{StaticResource PanelAltBrush}" BorderBrush="{StaticResource PanelBorderBrush}"
+                                BorderThickness="1" CornerRadius="18" Padding="22">
+                            <StackPanel Spacing="9">
+                                <TextBlock Text="GAME ENGINE" Foreground="{StaticResource WarningBrush}"
+                                           FontSize="12" FontWeight="Bold" />
+                                <TextBlock Text="Not connected yet" Foreground="{StaticResource MainTextBrush}"
+                                           FontSize="22" FontWeight="SemiBold" />
+                                <TextBlock Text="This build improves the UWP interface. It does not contain Horizon's Rust game engine yet."
+                                           Foreground="{StaticResource MutedTextBrush}" FontSize="14"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Grid>
+
+                <!-- Input test -->
+                <ScrollViewer x:Name="InputPanel" Visibility="Collapsed"
+                              VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Spacing="16" Padding="0,0,8,8">
+                        <StackPanel Spacing="6" Margin="0,0,0,4">
+                            <TextBlock Text="INPUT TEST" Foreground="{StaticResource AccentBrush}"
+                                       FontSize="13" FontWeight="Bold" />
+                            <TextBlock Text="Check every device." Foreground="{StaticResource MainTextBrush}"
+                                       FontSize="32" FontWeight="Bold" />
+                            <TextBlock Text="Connect a controller or move your mouse and keyboard to see live readings."
+                                       Foreground="{StaticResource MutedTextBrush}" FontSize="16"
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
+
+                        <Grid ColumnSpacing="14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Grid.Column="0" Background="{StaticResource PanelBrush}"
+                                    BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="1"
+                                    CornerRadius="16" Padding="20">
+                                <StackPanel Spacing="9">
+                                    <TextBlock Text="KEYBOARD" Foreground="{StaticResource AccentBrush}"
+                                               FontSize="12" FontWeight="Bold" />
+                                    <TextBlock x:Name="KeyText" Text="Press any key"
+                                               Foreground="{StaticResource MainTextBrush}" FontSize="23"
+                                               FontWeight="SemiBold" TextWrapping="Wrap" />
+                                    <TextBlock x:Name="KeyStateText" Text="Key state: waiting"
+                                               Foreground="{StaticResource MutedTextBrush}" FontSize="14" />
+                                </StackPanel>
+                            </Border>
+                            <Border Grid.Column="1" Background="{StaticResource PanelBrush}"
+                                    BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="1"
+                                    CornerRadius="16" Padding="20">
+                                <StackPanel Spacing="9">
+                                    <TextBlock Text="MOUSE / POINTER" Foreground="{StaticResource AccentBrush}"
+                                               FontSize="12" FontWeight="Bold" />
+                                    <TextBlock x:Name="MouseText" Text="Move or click"
+                                               Foreground="{StaticResource MainTextBrush}" FontSize="23"
+                                               FontWeight="SemiBold" TextWrapping="Wrap" />
+                                    <TextBlock x:Name="MouseStateText" Text="Mouse: waiting"
+                                               Foreground="{StaticResource MutedTextBrush}" FontSize="14" />
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+
+                        <Border Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource PanelBorderBrush}"
+                                BorderThickness="1" CornerRadius="16" Padding="22">
+                            <StackPanel Spacing="10">
+                                <TextBlock Text="XBOX CONTROLLER" Foreground="{StaticResource AccentBrush}"
+                                           FontSize="12" FontWeight="Bold" />
+                                <TextBlock x:Name="ControllerStatusText" Text="Looking for a connected controller..."
+                                           Foreground="{StaticResource MainTextBrush}" FontSize="21"
+                                           FontWeight="SemiBold" TextWrapping="Wrap" />
+                                <TextBlock x:Name="ControllerButtonsText" Text="Buttons: —"
+                                           Foreground="{StaticResource MutedTextBrush}" FontSize="15"
+                                           TextWrapping="Wrap" />
+                                <TextBlock x:Name="ControllerAxesText"
+                                           Text="Left stick: 0.00, 0.00   Right stick: 0.00, 0.00"
+                                           Foreground="{StaticResource MutedTextBrush}" FontSize="15"
+                                           TextWrapping="Wrap" />
+                                <TextBlock x:Name="TriggerText" Text="Triggers: 0.00 / 0.00"
+                                           Foreground="{StaticResource MutedTextBrush}" FontSize="15" />
+                                <TextBlock Text="The app polls controller state for this test. Game input mapping will be added with the game engine."
+                                           Foreground="{StaticResource MutedTextBrush}" FontSize="13"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- About -->
+                <Grid x:Name="AboutPanel" Visibility="Collapsed">
+                    <StackPanel Spacing="16">
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="ABOUT THIS BUILD" Foreground="{StaticResource AccentBrush}"
+                                       FontSize="13" FontWeight="Bold" />
+                            <TextBlock Text="A stronger starting point." Foreground="{StaticResource MainTextBrush}"
+                                       FontSize="32" FontWeight="Bold" />
+                        </StackPanel>
+                        <Border Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource PanelBorderBrush}"
+                                BorderThickness="1" CornerRadius="16" Padding="24">
+                            <StackPanel Spacing="12">
+                                <TextBlock Text="WHAT'S INCLUDED" Foreground="{StaticResource AccentBrush}"
+                                           FontSize="12" FontWeight="Bold" />
+                                <TextBlock Text="• TV-sized Home, Input Test and About screens"
+                                           Foreground="{StaticResource MainTextBrush}" FontSize="17" />
+                                <TextBlock Text="• Controller-friendly focus and button navigation"
+                                           Foreground="{StaticResource MainTextBrush}" FontSize="17" />
+                                <TextBlock Text="• Live gamepad buttons, sticks and trigger readings"
+                                           Foreground="{StaticResource MainTextBrush}" FontSize="17" />
+                                <TextBlock Text="• Keyboard and mouse input diagnostics"
+                                           Foreground="{StaticResource MainTextBrush}" FontSize="17" />
+                            </StackPanel>
+                        </Border>
+                        <Border Background="{StaticResource PanelAltBrush}" BorderBrush="{StaticResource PanelBorderBrush}"
+                                BorderThickness="1" CornerRadius="16" Padding="24">
+                            <StackPanel Spacing="9">
+                                <TextBlock Text="WHAT'S STILL NEEDED" Foreground="{StaticResource WarningBrush}"
+                                           FontSize="12" FontWeight="Bold" />
+                                <TextBlock Text="The Horizon Rust engine must be ported and connected before this app can start Minecraft. The Android launcher uses Android-specific services and a Vulkan renderer, so a Windows/Xbox port needs separate platform work."
+                                           Foreground="{StaticResource MainTextBrush}" FontSize="16"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Grid>
+            </Grid>
+        </Grid>
+
+        <Grid Grid.Row="2" Margin="0,18,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="HORIZON XBOX  •  UWP SHELL PREVIEW"
+                       Foreground="{StaticResource MutedTextBrush}" FontSize="12"
+                       VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" Text="D-PAD / STICK: MOVE     A: SELECT     B: BACK"
+                       Foreground="{StaticResource MutedTextBrush}" FontSize="12"
+                       VerticalAlignment="Center" />
+        </Grid>
+    </Grid>
+</Page>

@@ -4,27 +4,59 @@ name: Build UWP starter
 on:
   workflow_dispatch:
   push:
-    branches: [ main, master ]
+    branches:
+      - main
+      - master
 
 jobs:
   build:
+    name: Build Horizon Xbox Starter
     runs-on: windows-2022
-    steps:
-      - uses: actions/checkout@v5
 
-      - name: Set up MSBuild
+    steps:
+      - name: Download project files
+        uses: actions/checkout@v5
+
+      - name: Find MSBuild
         uses: microsoft/setup-msbuild@v2
+
+      - name: Find Horizon solution
+        shell: pwsh
+        run: |
+          Write-Host "Searching repository for solution..."
+          Get-ChildItem -Path . -Recurse -File |
+            Select-Object -ExpandProperty FullName
+
+          $solution = Get-ChildItem -Path . -Recurse -File -Filter "HorizonXboxStarter.sln" |
+            Select-Object -First 1
+
+          if (-not $solution) {
+            throw "HorizonXboxStarter.sln was not found. Check that the project files were uploaded."
+          }
+
+          "SOLUTION_PATH=$($solution.FullName)" >> $env:GITHUB_ENV
 
       - name: Build UWP package
         shell: pwsh
         run: |
-          msbuild HorizonXboxStarter.sln /m /p:Configuration=Release /p:Platform=x86 /p:AppxPackageSigningEnabled=false
+          Write-Host "Building: $env:SOLUTION_PATH"
 
-      - name: Upload build output
+          msbuild "$env:SOLUTION_PATH" `
+            /m `
+            /p:Configuration=Release `
+            /p:Platform=x86 `
+            /p:AppxPackageSigningEnabled=false `
+            /p:AppxBundle=Never `
+            /verbosity:minimal
+
+      - name: Upload Xbox package
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: HorizonXboxStarter-UWP
           path: |
-            HorizonXboxStarter/AppPackages/**/*.appx
-            HorizonXboxStarter/AppPackages/**/*.msix
+            **/AppPackages/**/*.appx
+            **/AppPackages/**/*.msix
+            **/bin/**/*.appx
+            **/bin/**/*.msix
           if-no-files-found: warn

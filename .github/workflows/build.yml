@@ -6,10 +6,13 @@ on:
     branches:
       - main
       - master
+      - xbox-horizon-shell-v2
+      - horizon-uwp-engine-port
   pull_request:
     branches:
       - main
       - master
+      - xbox-horizon-shell-v2
 
 jobs:
   build:
@@ -81,6 +84,75 @@ jobs:
 
           "SOLUTION_PATH=$($solution.FullName)" >> $env:GITHUB_ENV
           "SOURCE_ROOT=$sourceRoot" >> $env:GITHUB_ENV
+
+      - name: Check out pinned Horizon Rust engine
+        uses: actions/checkout@v4
+        with:
+          repository: horizon-rust/horizon
+          ref: 83ad384f48d0742746d518737511882680aab5b7
+          path: HorizonEngine
+
+      - name: Set up MSVC environment for x64 UWP
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Install nightly Rust and source
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rust-src
+
+      - name: Build and package Horizon native bridge
+        shell: pwsh
+        run: |
+          cargo +nightly build --manifest-path HorizonUwpEngineBridge/Cargo.toml --target x86_64-uwp-windows-msvc -Z build-std=std,panic_abort --release
+          if ($LASTEXITCODE -ne 0) {
+            throw "Horizon's native UWP bridge DLL failed to build."
+          }
+
+          $dll = Join-Path $env:GITHUB_WORKSPACE "HorizonUwpEngineBridge/target/x86_64-uwp-windows-msvc/release/horizon_uwp_engine_bridge.dll"
+          if (-not (Test-Path -LiteralPath $dll)) {
+            throw "The native UWP bridge DLL was not produced: $dll"
+          }
+
+          $projectDir = Split-Path -Parent $env:SOLUTION_PATH
+          $packageDll = Join-Path $projectDir "horizon_uwp_engine_bridge.dll"
+          Copy-Item -LiteralPath $dll -Destination $packageDll -Force
+
+          $projectFile = Join-Path $projectDir "HorizonXboxStarter.csproj"
+          if (-not (Test-Path -LiteralPath $projectFile)) {
+            $projectFile = Get-ChildItem -Path $projectDir -Filter "*.csproj" -File |
+              Select-Object -First 1 -ExpandProperty FullName
+          }
+          if (-not $projectFile) {
+            throw "Could not find the UWP project file to include the native bridge."
+          }
+
+          [xml]$projectXml = Get-Content -LiteralPath $projectFile -Raw
+          $existing = $projectXml.SelectSingleNode("//*[local-name()='Content' and @Include='horizon_uwp_engine_bridge.dll']")
+          if (-not $existing) {
+            $ns = $projectXml.DocumentElement.NamespaceURI
+            $group = $projectXml.SelectSingleNode("//*[local-name()='ItemGroup']")
+            if (-not $group) {
+              $group = $projectXml.CreateElement("ItemGroup", $ns)
+              [void]$projectXml.DocumentElement.AppendChild($group)
+            }
+            $content = $projectXml.CreateElement("Content", $ns)
+            $content.SetAttribute("Include", "horizon_uwp_engine_bridge.dll")
+            [void]$group.AppendChild($content)
+
+            $settings = [System.Xml.XmlWriterSettings]::new()
+            $settings.Encoding = [System.Text.UTF8Encoding]::new($false)
+            $settings.Indent = $true
+            $writer = [System.Xml.XmlWriter]::Create($projectFile, $settings)
+            try {
+              $projectXml.Save($writer)
+            } finally {
+              $writer.Dispose()
+            }
+          }
+
+          Write-Host "Included the x64 UWP Rust bridge DLL in the UWP project."
 
       - name: Apply improved Xbox UWP shell
         shell: pwsh
@@ -332,6 +404,38 @@ jobs:
 
           if ($LASTEXITCODE -ne 0) {
             throw "UWP build failed."
+          }
+
+      - name: Verify the native bridge is inside the UWP package
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $sourceRoot = $env:SOURCE_ROOT
+          $packages = Get-ChildItem -Path $sourceRoot -File -Recurse |
+            Where-Object { $_.Extension -in @(".appx", ".msix") }
+
+          if (-not $packages) {
+            throw "No UWP package was produced."
+          }
+
+          $verified = $false
+          foreach ($package in $packages) {
+            $archive = [System.IO.Compression.ZipFile]::OpenRead($package.FullName)
+            try {
+              $entry = $archive.Entries |
+                Where-Object { $_.FullName -ieq "horizon_uwp_engine_bridge.dll" } |
+                Select-Object -First 1
+              if ($entry) {
+                Write-Host "Verified native bridge in $($package.Name): $($entry.FullName)"
+                $verified = $true
+              }
+            } finally {
+              $archive.Dispose()
+            }
+          }
+
+          if (-not $verified) {
+            throw "The UWP package does not contain horizon_uwp_engine_bridge.dll."
           }
 
       - name: Collect Xbox packages

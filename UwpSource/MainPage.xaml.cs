@@ -78,12 +78,57 @@ namespace HorizonXboxStarter
                 ShowPanel("home");
                 NavHomeButton.Focus(FocusState.Programmatic);
                 args.Handled = true;
+                return;
             }
-            else if (args.VirtualKey == VirtualKey.F1)
+
+            if (args.VirtualKey == VirtualKey.F1)
             {
                 ShowPanel("input");
                 NavInputButton.Focus(FocusState.Programmatic);
                 args.Handled = true;
+                return;
+            }
+
+            if (args.VirtualKey == VirtualKey.F2)
+            {
+                ShowPanel("about");
+                NavAboutButton.Focus(FocusState.Programmatic);
+                args.Handled = true;
+                return;
+            }
+
+            // Arrow keys move the current keyboard focus between interactive controls.
+            // WASD is also supported on non-diagnostic pages, while remaining available
+            // as ordinary key input on the Input Test screen.
+            FocusNavigationDirection? direction = GetFocusDirection(args.VirtualKey);
+            if (direction.HasValue && FocusManager.TryMoveFocus(direction.Value))
+            {
+                args.Handled = true;
+            }
+        }
+
+        private FocusNavigationDirection? GetFocusDirection(VirtualKey key)
+        {
+            switch (key)
+            {
+                case VirtualKey.Left:
+                    return FocusNavigationDirection.Left;
+                case VirtualKey.Right:
+                    return FocusNavigationDirection.Right;
+                case VirtualKey.Up:
+                    return FocusNavigationDirection.Up;
+                case VirtualKey.Down:
+                    return FocusNavigationDirection.Down;
+                case VirtualKey.A when _currentPage != "input":
+                    return FocusNavigationDirection.Left;
+                case VirtualKey.D when _currentPage != "input":
+                    return FocusNavigationDirection.Right;
+                case VirtualKey.W when _currentPage != "input":
+                    return FocusNavigationDirection.Up;
+                case VirtualKey.S when _currentPage != "input":
+                    return FocusNavigationDirection.Down;
+                default:
+                    return null;
             }
         }
 

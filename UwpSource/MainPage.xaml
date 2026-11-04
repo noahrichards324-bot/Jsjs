@@ -118,6 +118,10 @@
                                 <TextBlock Text="The app interface is ready for the next integration stage."
                                            Foreground="{StaticResource MutedTextBrush}" FontSize="14"
                                            TextWrapping="Wrap" />
+                                <TextBlock x:Name="NativeBridgeStatusText"
+                                           Text="Native input bridge: not loaded."
+                                           Foreground="{StaticResource MutedTextBrush}" FontSize="12"
+                                           TextWrapping="Wrap" />
                             </StackPanel>
                         </Border>
 

@@ -82,6 +82,180 @@ jobs:
           "SOLUTION_PATH=$($solution.FullName)" >> $env:GITHUB_ENV
           "SOURCE_ROOT=$sourceRoot" >> $env:GITHUB_ENV
 
+      - name: Remove incompatible Xamarin.Forms XAML attribute
+        shell: pwsh
+        run: |
+          $projectDir = Split-Path -Parent $env:SOLUTION_PATH
+          $assemblyInfo = Join-Path $projectDir "Properties/AssemblyInfo.cs"
+
+          if (-not (Test-Path -LiteralPath $assemblyInfo)) {
+            throw "AssemblyInfo.cs was not found: $assemblyInfo"
+          }
+
+          $source = Get-Content -LiteralPath $assemblyInfo -Raw
+          $pattern = '(?m)^\s*\[assembly:\s*XamlCompilation\([^\r\n]*\)\]\s*\r?\n?'
+          $updated = [regex]::Replace($source, $pattern, '')
+
+          if ($updated -eq $source) {
+            Write-Host "No Xamarin.Forms XamlCompilation assembly attribute was present."
+          } else {
+            Set-Content -LiteralPath $assemblyInfo -Value $updated -NoNewline -Encoding utf8
+            Write-Host "Removed the unsupported XamlCompilation assembly attribute."
+          }
+
+      - name: Add required PhoneIdentity to app manifest
+        shell: pwsh
+        run: |
+          $projectDir = Split-Path -Parent $env:SOLUTION_PATH
+          $manifest = Get-ChildItem -Path $projectDir -Filter "Package.appxmanifest" -File -Recurse |
+            Select-Object -First 1
+
+          if (-not $manifest) {
+            throw "Package.appxmanifest was not found under $projectDir"
+          }
+
+          [xml]$xml = Get-Content -LiteralPath $manifest.FullName -Raw
+          $root = $xml.DocumentElement
+          $phoneNamespace = "http://schemas.microsoft.com/appx/2014/phone/manifest"
+          $xmlnsNamespace = "http://www.w3.org/2000/xmlns/"
+
+          # Declare the Phone manifest namespace if it is not already present.
+          if (-not $root.HasAttribute("mp", $xmlnsNamespace)) {
+            $namespaceAttribute = $xml.CreateAttribute("xmlns", "mp", $xmlnsNamespace)
+            $namespaceAttribute.Value = $phoneNamespace
+            [void]$root.Attributes.Append($namespaceAttribute)
+          }
+
+          # Keep stable identifiers across builds so package identity does not change.
+          $productId = "5f7d7d39-b7b6-4d57-9a56-3b3c916a4a01"
+          $publisherId = "7c2f5b39-54d6-4d3d-ae9d-d83cae7f1c02"
+          $phoneIdentity = $xml.GetElementsByTagName("PhoneIdentity", $phoneNamespace) | Select-Object -First 1
+
+          if (-not $phoneIdentity) {
+            $phoneIdentity = $xml.CreateElement("mp", "PhoneIdentity", $phoneNamespace)
+            $identity = $root.SelectSingleNode("./*[local-name()='Identity']")
+
+            if ($identity) {
+              [void]$root.InsertAfter($phoneIdentity, $identity)
+            } else {
+              [void]$root.PrependChild($phoneIdentity)
+            }
+          }
+
+          $phoneIdentity.SetAttribute("PhoneProductId", $productId)
+          $phoneIdentity.SetAttribute("PhonePublisherId", $publisherId)
+
+          $settings = New-Object System.Xml.XmlWriterSettings
+          $settings.Encoding = New-Object System.Text.UTF8Encoding($false)
+          $settings.Indent = $true
+          $writer = [System.Xml.XmlWriter]::Create($manifest.FullName, $settings)
+          try {
+            $xml.Save($writer)
+          } finally {
+            $writer.Dispose()
+          }
+
+          Write-Host "Added stable PhoneIdentity to $($manifest.FullName)"
+
+      - name: Create correctly sized splash screen
+        shell: pwsh
+        run: |
+          $projectDir = Split-Path -Parent $env:SOLUTION_PATH
+          $assetsDir = Join-Path $projectDir "Assets"
+          New-Item -ItemType Directory -Path $assetsDir -Force | Out-Null
+
+          Add-Type -AssemblyName System.Drawing
+          $splashPath = Join-Path $assetsDir "SplashScreen.png"
+          $bitmap = [System.Drawing.Bitmap]::new(620, 300)
+          $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+
+          try {
+            $graphics.Clear([System.Drawing.Color]::FromArgb(255, 20, 24, 32))
+            $font = [System.Drawing.Font]::new("Segoe UI", 30, [System.Drawing.FontStyle]::Regular)
+            $brush = [System.Drawing.SolidBrush]::new([System.Drawing.Color]::White)
+            try {
+              $format = [System.Drawing.StringFormat]::new()
+              $format.Alignment = [System.Drawing.StringAlignment]::Center
+              $format.LineAlignment = [System.Drawing.StringAlignment]::Center
+              $graphics.DrawString("Horizon Xbox", $font, $brush, [System.Drawing.RectangleF]::new(0, 0, 620, 300), $format)
+              $format.Dispose()
+            } finally {
+              $brush.Dispose()
+              $font.Dispose()
+            }
+
+            $bitmap.Save($splashPath, [System.Drawing.Imaging.ImageFormat]::Png)
+          } finally {
+            $graphics.Dispose()
+            $bitmap.Dispose()
+          }
+
+          [xml]$manifestXml = Get-Content -LiteralPath (Join-Path $projectDir "Package.appxmanifest") -Raw
+          $splashElements = $manifestXml.SelectNodes("//*[local-name()='SplashScreen']")
+          if (-not $splashElements -or $splashElements.Count -eq 0) {
+            throw "The app manifest does not contain a SplashScreen element."
+          }
+
+          foreach ($element in $splashElements) {
+            $element.SetAttribute("Image", "Assets\SplashScreen.png")
+          }
+
+          $manifestPath = Join-Path $projectDir "Package.appxmanifest"
+          $settings = [System.Xml.XmlWriterSettings]::new()
+          $settings.Encoding = [System.Text.UTF8Encoding]::new($false)
+          $settings.Indent = $true
+          $writer = [System.Xml.XmlWriter]::Create($manifestPath, $settings)
+          try {
+            $manifestXml.Save($writer)
+          } finally {
+            $writer.Dispose()
+          }
+
+          Write-Host "Created 620x300 splash screen and updated Package.appxmanifest."
+
+      - name: Include generated splash screen in UWP package
+        shell: pwsh
+        run: |
+          $projectDir = Split-Path -Parent $env:SOLUTION_PATH
+          $projectFile = Join-Path $projectDir "HorizonXboxStarter.csproj"
+
+          if (-not (Test-Path -LiteralPath $projectFile)) {
+            $projectFile = Get-ChildItem -Path $projectDir -Filter "*.csproj" -File |
+              Select-Object -First 1 -ExpandProperty FullName
+          }
+
+          if (-not $projectFile) {
+            throw "Could not find the UWP project file."
+          }
+
+          [xml]$projectXml = Get-Content -LiteralPath $projectFile -Raw
+          $ns = $projectXml.DocumentElement.NamespaceURI
+          $existing = $projectXml.SelectSingleNode("//*[local-name()='Content' and @Include='Assets\SplashScreen.png']")
+
+          if (-not $existing) {
+            $itemGroup = $projectXml.SelectSingleNode("//*[local-name()='ItemGroup']")
+            if (-not $itemGroup) {
+              $itemGroup = $projectXml.CreateElement("ItemGroup", $ns)
+              [void]$projectXml.DocumentElement.AppendChild($itemGroup)
+            }
+
+            $contentItem = $projectXml.CreateElement("Content", $ns)
+            $contentItem.SetAttribute("Include", "Assets\SplashScreen.png")
+            [void]$itemGroup.AppendChild($contentItem)
+          }
+
+          $settings = [System.Xml.XmlWriterSettings]::new()
+          $settings.Encoding = [System.Text.UTF8Encoding]::new($false)
+          $settings.Indent = $true
+          $writer = [System.Xml.XmlWriter]::Create($projectFile, $settings)
+          try {
+            $projectXml.Save($writer)
+          } finally {
+            $writer.Dispose()
+          }
+
+          Write-Host "Added Assets\SplashScreen.png to the UWP Content items in $projectFile."
+
       - name: Restore NuGet packages
         shell: pwsh
         run: |

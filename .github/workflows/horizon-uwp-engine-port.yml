@@ -8,6 +8,7 @@ on:
     paths:
       - ".github/workflows/horizon-uwp-engine-port.yml"
       - "HorizonUwpPort/**"
+      - "HorizonUwpEngineBridge/**"
 
 permissions:
   contents: read
@@ -74,3 +75,43 @@ jobs:
         run: |
           cargo +nightly check --manifest-path HorizonEngine/Cargo.toml --package horizon-client --target x86_64-uwp-windows-msvc -Z build-std=std,panic_abort --no-default-features --features system-allocator --locked
           if ($LASTEXITCODE -ne 0) { throw "The upstream Horizon client does not yet pass the x64 UWP compile check. Review this job's compiler output for the first porting blockers." }
+
+  horizon-engine-bridge-link:
+    name: Link Horizon into an x64 UWP native DLL
+    runs-on: windows-2022
+    steps:
+      - name: Check out port branch
+        uses: actions/checkout@v4
+
+      - name: Check out pinned Horizon source
+        uses: actions/checkout@v4
+        with:
+          repository: horizon-rust/horizon
+          ref: 83ad384f48d0742746d518737511882680aab5b7
+          path: HorizonEngine
+
+      - name: Set up MSVC tools
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Install nightly Rust and source
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rust-src
+
+      - name: Build the native engine bridge DLL
+        shell: pwsh
+        run: |
+          cargo +nightly build --manifest-path HorizonUwpEngineBridge/Cargo.toml --target x86_64-uwp-windows-msvc -Z build-std=std,panic_abort --release
+          if ($LASTEXITCODE -ne 0) { throw "Linking Horizon into the x64 UWP DLL failed." }
+          $dll = Join-Path $env:GITHUB_WORKSPACE "HorizonUwpEngineBridge/target/x86_64-uwp-windows-msvc/release/horizon_uwp_engine_bridge.dll"
+          if (-not (Test-Path -LiteralPath $dll)) { throw "The engine bridge DLL was not produced: $dll" }
+          Get-Item -LiteralPath $dll | Format-List FullName,Length,LastWriteTime
+
+      - name: Upload linked Horizon UWP DLL
+        uses: actions/upload-artifact@v4
+        with:
+          name: HorizonEngine-UWP-x64-DLL
+          path: HorizonUwpEngineBridge/target/x86_64-uwp-windows-msvc/release/horizon_uwp_engine_bridge.dll
+          if-no-files-found: error

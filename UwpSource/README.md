@@ -15,5 +15,8 @@ This folder contains the UWP page resources copied into the starter project duri
 The default movement, inventory, gameplay and function-key assignments follow the open-source Horizon input mapping table:
 https://github.com/horizon-rust/horizon/blob/main/crates/horizon-client-input/src/keybinds.rs
 
+## Engine port status
+See [ENGINE_PORT_STATUS.md](ENGINE_PORT_STATUS.md) for the verified technical blockers and work required to port Horizon's Rust game engine to Xbox UWP.
+
 ## Not included
 This is not the Horizon game engine or an Android-to-UWP conversion. The Horizon Rust engine has not been ported or linked to this UWP project. The controls page and diagnostics prove that the UWP shell can receive and configure input; they do not yet make Minecraft playable. A Windows/Xbox engine port still requires separate renderer, input, filesystem, networking and platform integration work.

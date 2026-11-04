@@ -1,9 +1,12 @@
-
 name: Build UWP starter
 
 on:
   workflow_dispatch:
   push:
+    branches:
+      - main
+      - master
+  pull_request:
     branches:
       - main
       - master
@@ -19,6 +22,9 @@ jobs:
 
       - name: Set up MSBuild
         uses: microsoft/setup-msbuild@v2
+
+      - name: Set up NuGet
+        uses: NuGet/setup-nuget@v2
 
       - name: Extract project files
         shell: pwsh
@@ -76,6 +82,19 @@ jobs:
           "SOLUTION_PATH=$($solution.FullName)" >> $env:GITHUB_ENV
           "SOURCE_ROOT=$sourceRoot" >> $env:GITHUB_ENV
 
+      - name: Restore NuGet packages
+        shell: pwsh
+        run: |
+          Write-Host "Restoring NuGet packages for the solution..."
+
+          nuget restore "$env:SOLUTION_PATH" `
+            -NonInteractive `
+            -Verbosity detailed
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "NuGet package restoration failed."
+          }
+
       - name: Build UWP package
         shell: pwsh
         run: |
@@ -115,7 +134,11 @@ jobs:
             /p:AppxPackageSigningEnabled=false `
             /p:AppxBundle=Never `
             /p:UapAppxPackageBuildMode=SideloadOnly `
-            /verbosity:minimal
+            /verbosity:normal
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "UWP build failed."
+          }
 
       - name: Collect Xbox packages
         if: always()
@@ -126,8 +149,13 @@ jobs:
           New-Item -ItemType Directory `
             -Path $output -Force | Out-Null
 
+          $sourceRoot = $env:SOURCE_ROOT
+          if (-not $sourceRoot) {
+            $sourceRoot = $env:GITHUB_WORKSPACE
+          }
+
           $packages = Get-ChildItem `
-            -Path $env:SOURCE_ROOT `
+            -Path $sourceRoot `
             -File -Recurse |
             Where-Object {
               $_.Extension -in @(".appx", ".msix", ".cer")
@@ -136,7 +164,7 @@ jobs:
           foreach ($package in $packages) {
             Copy-Item `
               -LiteralPath $package.FullName `
-              -Destination $output
+              -Destination $output -Force
           }
 
           Write-Host "Package collection finished."

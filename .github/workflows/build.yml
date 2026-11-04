@@ -157,6 +157,62 @@ jobs:
 
           Write-Host "Added stable PhoneIdentity to $($manifest.FullName)"
 
+      - name: Create correctly sized splash screen
+        shell: pwsh
+        run: |
+          $projectDir = Split-Path -Parent $env:SOLUTION_PATH
+          $assetsDir = Join-Path $projectDir "Assets"
+          New-Item -ItemType Directory -Path $assetsDir -Force | Out-Null
+
+          Add-Type -AssemblyName System.Drawing
+          $splashPath = Join-Path $assetsDir "SplashScreen.png"
+          $bitmap = [System.Drawing.Bitmap]::new(620, 300)
+          $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+
+          try {
+            $graphics.Clear([System.Drawing.Color]::FromArgb(255, 20, 24, 32))
+            $font = [System.Drawing.Font]::new("Segoe UI", 30, [System.Drawing.FontStyle]::Regular)
+            $brush = [System.Drawing.SolidBrush]::new([System.Drawing.Color]::White)
+            try {
+              $format = [System.Drawing.StringFormat]::new()
+              $format.Alignment = [System.Drawing.StringAlignment]::Center
+              $format.LineAlignment = [System.Drawing.StringAlignment]::Center
+              $graphics.DrawString("Horizon Xbox", $font, $brush, [System.Drawing.RectangleF]::new(0, 0, 620, 300), $format)
+              $format.Dispose()
+            } finally {
+              $brush.Dispose()
+              $font.Dispose()
+            }
+
+            $bitmap.Save($splashPath, [System.Drawing.Imaging.ImageFormat]::Png)
+          } finally {
+            $graphics.Dispose()
+            $bitmap.Dispose()
+          }
+
+          [xml]$manifestXml = Get-Content -LiteralPath (Join-Path $projectDir "Package.appxmanifest") -Raw
+          $splashElements = $manifestXml.SelectNodes("//*[local-name()='SplashScreen']")
+          if (-not $splashElements -or $splashElements.Count -eq 0) {
+            throw "The app manifest does not contain a SplashScreen element."
+          }
+
+          foreach ($element in $splashElements) {
+            $element.SetAttribute("Image", "Assets\SplashScreen.png")
+          }
+
+          $manifestPath = Join-Path $projectDir "Package.appxmanifest"
+          $settings = [System.Xml.XmlWriterSettings]::new()
+          $settings.Encoding = [System.Text.UTF8Encoding]::new($false)
+          $settings.Indent = $true
+          $writer = [System.Xml.XmlWriter]::Create($manifestPath, $settings)
+          try {
+            $manifestXml.Save($writer)
+          } finally {
+            $writer.Dispose()
+          }
+
+          Write-Host "Created 620x300 splash screen and updated Package.appxmanifest."
+
       - name: Restore NuGet packages
         shell: pwsh
         run: |

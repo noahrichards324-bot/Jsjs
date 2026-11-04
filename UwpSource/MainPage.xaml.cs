@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using Windows.Gaming.Input;
 using Windows.Storage;
 using Windows.UI.Xaml.Controls.Primitives;
@@ -50,7 +51,40 @@ namespace HorizonXboxStarter
         private bool _invertMouseY;
         private bool _coreWindowHooksAttached;
         private GamepadButtons _lastButtons = GamepadButtons.None;
+        private bool _nativeBridgeAvailable;
+        private const uint NativeKeyEvent = 1;
+        private const uint NativeMouseButtonEvent = 2;
+        private const uint NativeMouseMoveEvent = 3;
+        private const uint NativeMouseWheelEvent = 4;
+        private const uint NativeGamepadButtonEvent = 5;
+        private const uint NativeGamepadAxisEvent = 6;
         private string _currentPage = "home";
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct NativeInputEvent
+        {
+            public uint Kind;
+            public uint Code;
+            public uint State;
+            public float X;
+            public float Y;
+        }
+
+        [DllImport("horizon_uwp_engine_bridge.dll", EntryPoint = "horizon_uwp_engine_bridge_abi_version",
+            ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
+        private static extern uint NativeAbiVersion();
+
+        [DllImport("horizon_uwp_engine_bridge.dll", EntryPoint = "horizon_uwp_input_push",
+            ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
+        private static extern int NativeInputPush(uint kind, uint code, uint state, float x, float y);
+
+        [DllImport("horizon_uwp_engine_bridge.dll", EntryPoint = "horizon_uwp_input_pop",
+            ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
+        private static extern int NativeInputPop(out NativeInputEvent inputEvent);
+
+        [DllImport("horizon_uwp_engine_bridge.dll", EntryPoint = "horizon_uwp_input_clear",
+            ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
+        private static extern void NativeInputClear();
 
         public MainPage()
         {
@@ -61,6 +95,7 @@ namespace HorizonXboxStarter
         {
             AttachKeyboardHooks();
             InitializeControlSettings();
+            InitializeNativeBridge();
             _controllerTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
             _controllerTimer.Tick += ControllerTimer_Tick;
             _controllerTimer.Start();
@@ -88,6 +123,79 @@ namespace HorizonXboxStarter
             }
 
             _pressedKeys.Clear();
+            if (_nativeBridgeAvailable)
+            {
+                try { NativeInputClear(); } catch { }
+            }
+        }
+
+        private void InitializeNativeBridge()
+        {
+            try
+            {
+                uint version = NativeAbiVersion();
+                if (version != 2)
+                {
+                    _nativeBridgeAvailable = false;
+                    NativeBridgeStatusText.Text = "Native bridge version mismatch. Expected ABI v2.";
+                    return;
+                }
+
+                NativeInputClear();
+                _nativeBridgeAvailable = true;
+                NativeBridgeStatusText.Text =
+                    "Native input ABI v2 ready. This tests event transport only; Minecraft gameplay is not connected.";
+            }
+            catch (DllNotFoundException)
+            {
+                _nativeBridgeAvailable = false;
+                NativeBridgeStatusText.Text = "Native bridge DLL not packaged yet.";
+            }
+            catch (EntryPointNotFoundException)
+            {
+                _nativeBridgeAvailable = false;
+                NativeBridgeStatusText.Text = "Native bridge DLL is outdated or incomplete.";
+            }
+            catch (BadImageFormatException)
+            {
+                _nativeBridgeAvailable = false;
+                NativeBridgeStatusText.Text = "Native bridge architecture does not match this app.";
+            }
+        }
+
+        // Round-trip one diagnostic event through the Rust C ABI. The test panel
+        // immediately removes the event again, so it cannot fill the game queue.
+        private void TestNativeInputRoundTrip(uint kind, uint code, uint state, float x, float y)
+        {
+            if (!_nativeBridgeAvailable) return;
+
+            try
+            {
+                int pushed = NativeInputPush(kind, code, state, x, y);
+                if (pushed != 0)
+                {
+                    NativeBridgeStatusText.Text = "Native input queue rejected a diagnostic event: " + pushed;
+                    return;
+                }
+
+                NativeInputEvent received;
+                int popped = NativeInputPop(out received);
+                if (popped != 1 || received.Kind != kind || received.Code != code ||
+                    received.State != state || Math.Abs(received.X - x) > 0.001f ||
+                    Math.Abs(received.Y - y) > 0.001f)
+                {
+                    NativeBridgeStatusText.Text = "Native input ABI round-trip check failed.";
+                    return;
+                }
+
+                NativeBridgeStatusText.Text =
+                    "Native input ABI v2: event round-trip OK. Gameplay is not connected yet.";
+            }
+            catch (Exception ex)
+            {
+                _nativeBridgeAvailable = false;
+                NativeBridgeStatusText.Text = "Native input bridge stopped: " + ex.GetType().Name;
+            }
         }
 
         private void AttachKeyboardHooks()
@@ -109,6 +217,7 @@ namespace HorizonXboxStarter
             {
                 KeyText.Text = args.VirtualKey.ToString();
                 KeyStateText.Text = "Key state: down  •  Keys held: " + _pressedKeys.Count;
+                TestNativeInputRoundTrip(NativeKeyEvent, (uint)args.VirtualKey, 1, 0.0f, 0.0f);
             }
 
             // Escape backs out of the shell's test/settings pages. In a future
@@ -154,6 +263,7 @@ namespace HorizonXboxStarter
             {
                 KeyText.Text = args.VirtualKey.ToString();
                 KeyStateText.Text = "Key state: released  •  Keys held: " + _pressedKeys.Count;
+                TestNativeInputRoundTrip(NativeKeyEvent, (uint)args.VirtualKey, 0, 0.0f, 0.0f);
             }
         }
 
@@ -172,6 +282,7 @@ namespace HorizonXboxStarter
                 double dy = (position.Y - _lastMousePosition.Y) * _mouseSensitivity;
                 if (_invertMouseY) dy = -dy;
                 MouseDeltaText.Text = string.Format("Scaled look delta  X: {0:0.00}   Y: {1:0.00}", dx, dy);
+                TestNativeInputRoundTrip(NativeMouseMoveEvent, 0, 0, (float)dx, (float)dy);
             }
             else
             {
@@ -194,6 +305,9 @@ namespace HorizonXboxStarter
             string button = GetMouseButtonName(point.Properties.PointerUpdateKind.ToString());
             string actions = GetMouseActions(button);
             MouseStateText.Text = "Pressed: " + (button ?? point.Properties.PointerUpdateKind.ToString());
+            uint buttonCode = GetMouseButtonCode(button);
+            if (buttonCode != 0)
+                TestNativeInputRoundTrip(NativeMouseButtonEvent, buttonCode, 1, 0.0f, 0.0f);
             if (!string.IsNullOrEmpty(actions))
             {
                 LastInputActionText.Text = "Mouse " + button + " → " + actions;
@@ -207,6 +321,9 @@ namespace HorizonXboxStarter
             if (point.PointerDevice.PointerDeviceType.ToString() != "Mouse") return;
             string button = GetMouseButtonName(point.Properties.PointerUpdateKind.ToString());
             MouseStateText.Text = "Released: " + (button ?? "mouse button");
+            uint buttonCode = GetMouseButtonCode(button);
+            if (buttonCode != 0)
+                TestNativeInputRoundTrip(NativeMouseButtonEvent, buttonCode, 0, 0.0f, 0.0f);
             ReleaseMouseCapture();
         }
 
@@ -217,6 +334,7 @@ namespace HorizonXboxStarter
             int delta = point.Properties.MouseWheelDelta;
             MouseStateText.Text = "Mouse wheel: " + delta;
             LastInputActionText.Text = "Mouse wheel → hotbar scroll";
+            TestNativeInputRoundTrip(NativeMouseWheelEvent, 0, 0, delta, 0.0f);
         }
 
         private void ReleaseMouseCapture()
@@ -237,6 +355,19 @@ namespace HorizonXboxStarter
             if (updateKind.StartsWith("XButton1")) return "X1";
             if (updateKind.StartsWith("XButton2")) return "X2";
             return null;
+        }
+
+        private uint GetMouseButtonCode(string button)
+        {
+            switch (button)
+            {
+                case "Left": return 1;
+                case "Right": return 2;
+                case "Middle": return 3;
+                case "X1": return 4;
+                case "X2": return 5;
+                default: return 0;
+            }
         }
 
         private string GetMouseActions(string button)
@@ -268,6 +399,26 @@ namespace HorizonXboxStarter
 
             GamepadReading reading = pad.GetCurrentReading();
             ControllerStatusText.Text = "Controller connected — live input is being read.";
+
+            if (_currentPage == "input")
+            {
+                foreach (GamepadButtons button in Enum.GetValues(typeof(GamepadButtons)))
+                {
+                    if (button == GamepadButtons.None) continue;
+                    bool wasPressed = (_lastButtons & button) == button;
+                    bool isPressed = (reading.Buttons & button) == button;
+                    if (wasPressed != isPressed)
+                        TestNativeInputRoundTrip(NativeGamepadButtonEvent, (uint)button,
+                            isPressed ? 1u : 0u, 0.0f, 0.0f);
+                }
+
+                TestNativeInputRoundTrip(NativeGamepadAxisEvent, 0, 0,
+                    (float)reading.LeftThumbstickX, (float)reading.LeftThumbstickY);
+                TestNativeInputRoundTrip(NativeGamepadAxisEvent, 1, 0,
+                    (float)reading.RightThumbstickX, (float)reading.RightThumbstickY);
+                TestNativeInputRoundTrip(NativeGamepadAxisEvent, 2, 0,
+                    (float)reading.LeftTrigger, (float)reading.RightTrigger);
+            }
             ControllerButtonsText.Text = "Buttons: " +
                 (reading.Buttons == GamepadButtons.None ? "None" : reading.Buttons.ToString());
             ControllerAxesText.Text = string.Format(

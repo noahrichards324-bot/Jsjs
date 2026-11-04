@@ -1,0 +1,22 @@
+[package]
+name = "horizon-uwp-engine-bridge"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+horizon-client = { path = "../HorizonEngine/crates/horizon-client", default-features = false, features = ["system-allocator"] }
+
+# Keep Horizon's workspace-specific dependency patches in effect when this
+# bridge is built as a separate top-level Cargo package.
+[patch.crates-io]
+wgpu-hal = { path = "../HorizonEngine/third_party/wgpu-hal" }
+naga = { path = "../HorizonEngine/third_party/naga" }
+libmimalloc-sys = { path = "../HorizonEngine/third_party/libmimalloc-sys" }
+
+[profile.release]
+panic = "abort"
+lto = "thin"

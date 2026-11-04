@@ -1,3 +1,4 @@
+
 name: Build UWP starter
 
 on:
@@ -9,14 +10,21 @@ jobs:
   build:
     runs-on: windows-2022
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+
+      - name: Set up MSBuild
+        uses: microsoft/setup-msbuild@v2
+
       - name: Build UWP package
         shell: pwsh
         run: |
           msbuild HorizonXboxStarter.sln /m /p:Configuration=Release /p:Platform=x86 /p:AppxPackageSigningEnabled=false
+
       - name: Upload build output
         uses: actions/upload-artifact@v4
         with:
           name: HorizonXboxStarter-UWP
-          path: HorizonXboxStarter/AppPackages/**/*.appx
+          path: |
+            HorizonXboxStarter/AppPackages/**/*.appx
+            HorizonXboxStarter/AppPackages/**/*.msix
           if-no-files-found: warn

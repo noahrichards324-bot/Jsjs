@@ -14,49 +14,113 @@ jobs:
     runs-on: windows-2022
 
     steps:
-      - name: Download project files
-        uses: actions/checkout@v5
+      - name: Download repository
+        uses: actions/checkout@v4
 
-      - name: Find MSBuild
+      - name: Set up MSBuild
         uses: microsoft/setup-msbuild@v2
 
-      - name: Find Horizon solution
+      - name: Extract project files
         shell: pwsh
         run: |
-          Write-Host "Searching repository for solution..."
-          Get-ChildItem -Path . -Recurse -File |
-            Select-Object -ExpandProperty FullName
+          Write-Host "Looking for the project..."
 
-          $solution = Get-ChildItem -Path . -Recurse -File -Filter "HorizonXboxStarter.sln" |
+          $solution = Get-ChildItem `
+            -Path $env:GITHUB_WORKSPACE `
+            -Filter "HorizonXboxStarter.sln" `
+            -File -Recurse |
             Select-Object -First 1
 
+          $sourceRoot = $env:GITHUB_WORKSPACE
+
           if (-not $solution) {
-            throw "HorizonXboxStarter.sln was not found. Check that the project files were uploaded."
+            Write-Host "Solution not found. Looking for ZIP..."
+
+            $zip = Get-ChildItem `
+              -Path $env:GITHUB_WORKSPACE `
+              -Filter "HorizonXboxStarter.zip" `
+              -File -Recurse |
+              Select-Object -First 1
+
+            if (-not $zip) {
+              throw "HorizonXboxStarter.zip was not found!"
+            }
+
+            $extractDir = Join-Path $env:RUNNER_TEMP "HorizonProject"
+
+            New-Item -ItemType Directory `
+              -Path $extractDir -Force | Out-Null
+
+            Expand-Archive `
+              -LiteralPath $zip.FullName `
+              -DestinationPath $extractDir `
+              -Force
+
+            $sourceRoot = $extractDir
+
+            Write-Host "ZIP extracted successfully."
+
+            $solution = Get-ChildItem `
+              -Path $extractDir `
+              -Filter "HorizonXboxStarter.sln" `
+              -File -Recurse |
+              Select-Object -First 1
           }
 
+          if (-not $solution) {
+            throw "Could not find HorizonXboxStarter.sln after extraction."
+          }
+
+          Write-Host "Found solution: $($solution.FullName)"
+
           "SOLUTION_PATH=$($solution.FullName)" >> $env:GITHUB_ENV
+          "SOURCE_ROOT=$sourceRoot" >> $env:GITHUB_ENV
 
       - name: Build UWP package
         shell: pwsh
         run: |
-          Write-Host "Building: $env:SOLUTION_PATH"
+          Write-Host "Starting UWP build..."
 
           msbuild "$env:SOLUTION_PATH" `
             /m `
             /p:Configuration=Release `
             /p:Platform=x86 `
+            /p:AppxPackage=true `
+            /p:GenerateAppxPackageOnBuild=true `
             /p:AppxPackageSigningEnabled=false `
             /p:AppxBundle=Never `
+            /p:UapAppxPackageBuildMode=SideloadOnly `
             /verbosity:minimal
 
-      - name: Upload Xbox package
+      - name: Collect Xbox packages
+        if: always()
+        shell: pwsh
+        run: |
+          $output = Join-Path $env:GITHUB_WORKSPACE "XboxBuild"
+
+          New-Item -ItemType Directory `
+            -Path $output -Force | Out-Null
+
+          $packages = Get-ChildItem `
+            -Path $env:SOURCE_ROOT `
+            -File -Recurse |
+            Where-Object {
+              $_.Extension -in @(".appx", ".msix", ".cer")
+            }
+
+          foreach ($package in $packages) {
+            Copy-Item `
+              -LiteralPath $package.FullName `
+              -Destination $output
+          }
+
+          Write-Host "Package collection finished."
+          Get-ChildItem $output
+
+      - name: Upload Xbox build
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: HorizonXboxStarter-UWP
-          path: |
-            **/AppPackages/**/*.appx
-            **/AppPackages/**/*.msix
-            **/bin/**/*.appx
-            **/bin/**/*.msix
+          path: XboxBuild/*
           if-no-files-found: warn

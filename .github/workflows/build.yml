@@ -103,6 +103,60 @@ jobs:
             Write-Host "Removed the unsupported XamlCompilation assembly attribute."
           }
 
+      - name: Add required PhoneIdentity to app manifest
+        shell: pwsh
+        run: |
+          $projectDir = Split-Path -Parent $env:SOLUTION_PATH
+          $manifest = Get-ChildItem -Path $projectDir -Filter "Package.appxmanifest" -File -Recurse |
+            Select-Object -First 1
+
+          if (-not $manifest) {
+            throw "Package.appxmanifest was not found under $projectDir"
+          }
+
+          [xml]$xml = Get-Content -LiteralPath $manifest.FullName -Raw
+          $root = $xml.DocumentElement
+          $phoneNamespace = "http://schemas.microsoft.com/appx/2014/phone/manifest"
+          $xmlnsNamespace = "http://www.w3.org/2000/xmlns/"
+
+          # Declare the Phone manifest namespace if it is not already present.
+          if (-not $root.HasAttribute("mp", $xmlnsNamespace)) {
+            $namespaceAttribute = $xml.CreateAttribute("xmlns", "mp", $xmlnsNamespace)
+            $namespaceAttribute.Value = $phoneNamespace
+            [void]$root.Attributes.Append($namespaceAttribute)
+          }
+
+          # Keep stable identifiers across builds so package identity does not change.
+          $productId = "5f7d7d39-b7b6-4d57-9a56-3b3c916a4a01"
+          $publisherId = "7c2f5b39-54d6-4d3d-ae9d-d83cae7f1c02"
+          $phoneIdentity = $xml.GetElementsByTagName("PhoneIdentity", $phoneNamespace) | Select-Object -First 1
+
+          if (-not $phoneIdentity) {
+            $phoneIdentity = $xml.CreateElement("mp", "PhoneIdentity", $phoneNamespace)
+            $identity = $root.SelectSingleNode("./*[local-name()='Identity']")
+
+            if ($identity) {
+              [void]$root.InsertAfter($phoneIdentity, $identity)
+            } else {
+              [void]$root.PrependChild($phoneIdentity)
+            }
+          }
+
+          $phoneIdentity.SetAttribute("PhoneProductId", $productId)
+          $phoneIdentity.SetAttribute("PhonePublisherId", $publisherId)
+
+          $settings = New-Object System.Xml.XmlWriterSettings
+          $settings.Encoding = New-Object System.Text.UTF8Encoding($false)
+          $settings.Indent = $true
+          $writer = [System.Xml.XmlWriter]::Create($manifest.FullName, $settings)
+          try {
+            $xml.Save($writer)
+          } finally {
+            $writer.Dispose()
+          }
+
+          Write-Host "Added stable PhoneIdentity to $($manifest.FullName)"
+
       - name: Restore NuGet packages
         shell: pwsh
         run: |

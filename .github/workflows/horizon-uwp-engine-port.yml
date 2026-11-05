@@ -1,4 +1,8 @@
 name: Horizon x64 UWP engine port probe
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 
 on:
   workflow_dispatch:
@@ -35,7 +39,7 @@ jobs:
         shell: pwsh
         run: |
           rustc +nightly --version
-          cargo +nightly build --manifest-path HorizonUwpPort/Cargo.toml --target x86_64-uwp-windows-msvc -Z build-std=std,panic_abort --release
+          cargo +nightly build --manifest-path HorizonUwpPort/Cargo.toml --target x86_64-uwp-windows-msvc -Z build-std=std,panic_abort --profile fast
           if ($LASTEXITCODE -ne 0) { throw "Rust UWP static-library smoke build failed." }
           Get-ChildItem HorizonUwpPort/target/x86_64-uwp-windows-msvc/release
 
@@ -103,9 +107,9 @@ jobs:
       - name: Build the native engine bridge DLL
         shell: pwsh
         run: |
-          cargo +nightly build --manifest-path HorizonUwpEngineBridge/Cargo.toml --target x86_64-uwp-windows-msvc -Z build-std=std,panic_abort --release
+          cargo +nightly build --manifest-path HorizonUwpEngineBridge/Cargo.toml --target x86_64-uwp-windows-msvc -Z build-std=std,panic_abort --profile fast
           if ($LASTEXITCODE -ne 0) { throw "Linking Horizon into the x64 UWP DLL failed." }
-          $dll = Join-Path $env:GITHUB_WORKSPACE "HorizonUwpEngineBridge/target/x86_64-uwp-windows-msvc/release/horizon_uwp_engine_bridge.dll"
+          $dll = Join-Path $env:GITHUB_WORKSPACE "HorizonUwpEngineBridge/target/x86_64-uwp-windows-msvc/fast/horizon_uwp_engine_bridge.dll"
           if (-not (Test-Path -LiteralPath $dll)) { throw "The engine bridge DLL was not produced: $dll" }
           Get-Item -LiteralPath $dll | Format-List FullName,Length,LastWriteTime
 
@@ -113,5 +117,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: HorizonEngine-UWP-x64-DLL
-          path: HorizonUwpEngineBridge/target/x86_64-uwp-windows-msvc/release/horizon_uwp_engine_bridge.dll
+          path: HorizonUwpEngineBridge/target/x86_64-uwp-windows-msvc/fast/horizon_uwp_engine_bridge.dll
           if-no-files-found: error

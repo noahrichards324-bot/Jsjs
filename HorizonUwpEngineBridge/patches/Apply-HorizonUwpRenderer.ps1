@@ -174,19 +174,11 @@ $gfx = Replace-Required $gfx '        let size = window.inner_size();' '        
 $gfx = Replace-Required $gfx 'size.width.clamp(1, max_side)' 'size[0].clamp(1, max_side)' "target width"
 $gfx = Replace-Required $gfx 'size.height.clamp(1, max_side)' 'size[1].clamp(1, max_side)' "target height"
 
-$oldInit = @'
-            last_wait: std::time::Duration::ZERO,
-            last_encode: std::time::Duration::ZERO,
-            window,
-            device,
-'@
-$newInit = @'
-            last_wait: std::time::Duration::ZERO,
-            last_encode: std::time::Duration::ZERO,
-            target,
-            device,
-'@
-$gfx = Replace-Required $gfx $oldInit $newInit "renderer target init"
+$displayInit = $gfx.IndexOf('            display: DisplayWatch::default(),')
+if ($displayInit -lt 0) { throw "Could not locate Renderer struct initializer." }
+$windowField = $gfx.IndexOf('            window,', $displayInit)
+if ($windowField -lt 0) { throw "Could not locate Renderer window field initializer." }
+$gfx = $gfx.Remove($windowField, '            window,'.Length).Insert($windowField, '            target,')
 
 $gfx = Replace-Required $gfx '            let hdr_output = hdr::output(&caps);' '            let hdr_output = if target.window().is_some() { hdr::output(&caps) } else { None };' "disable HDR for UWP panel"
 $gfx = Replace-Required $gfx '                    DisplayWatch::new(&self.window, self.surface.as_deref(), &self.adapter)' '                    if let Some(window) = self.target.window() { DisplayWatch::new(window, self.surface.as_deref(), &self.adapter) } else { (DisplayWatch::default(), None) }' "display watch for UWP"

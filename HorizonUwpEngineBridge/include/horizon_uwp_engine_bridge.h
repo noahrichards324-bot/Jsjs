@@ -7,7 +7,7 @@
 extern "C" {
 #endif
 
-#define HORIZON_UWP_ENGINE_BRIDGE_ABI_VERSION 2u
+#define HORIZON_UWP_ENGINE_BRIDGE_ABI_VERSION 3u
 #define HORIZON_UWP_INPUT_QUEUE_CAPACITY 4096u
 
 typedef struct HorizonUwpInputEvent {
@@ -44,6 +44,12 @@ int32_t horizon_uwp_surface_last_error(void);
 int32_t horizon_uwp_surface_resize(void *host, uint32_t width, uint32_t height);
 int32_t horizon_uwp_surface_present(void *host);
 void horizon_uwp_surface_destroy(void *host);
+
+/* Actual Horizon client host. The panel is an ISwapChainPanelNative COM pointer. */
+int32_t horizon_uwp_game_start(void *panel, uint32_t width, uint32_t height);
+int32_t horizon_uwp_game_input_push(uint32_t kind, uint32_t code, uint32_t state, float x, float y);
+void horizon_uwp_game_stop(void);
+uint32_t horizon_uwp_game_is_running(void);
 
 /* Link anchor only; do not call until the UWP-native event loop is implemented. */
 uintptr_t horizon_uwp_engine_entrypoint_address(void);

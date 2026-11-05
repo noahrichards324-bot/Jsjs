@@ -112,6 +112,10 @@ namespace HorizonXboxStarter
             ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
         private static extern uint NativeGameIsRunning();
 
+        [DllImport("horizon_uwp_engine_bridge.dll", EntryPoint = "horizon_uwp_game_last_error",
+            ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
+        private static extern int NativeGameLastError();
+
         [DllImport("horizon_uwp_engine_bridge.dll", EntryPoint = "horizon_uwp_surface_create",
             ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
         private static extern IntPtr NativeSurfaceCreate(IntPtr panel, uint width, uint height);
@@ -464,8 +468,11 @@ namespace HorizonXboxStarter
                     if (!_gameRunning)
                     {
                         EngineSurfaceButton.Content = "START HORIZON";
-                        EngineSurfaceStatusText.Text =
-                            "Horizon stopped. Check the game status and local files if it did not reach the title screen.";
+                        int gameError = NativeGameLastError();
+                        EngineSurfaceStatusText.Text = gameError == 0
+                            ? "Horizon stopped."
+                            : "Horizon could not start or stopped. Error code: " + gameError +
+                              ". Check the game log and local Minecraft resources.";
                         _engineMouseCaptured = false;
                         _hasEngineMousePosition = false;
                     }

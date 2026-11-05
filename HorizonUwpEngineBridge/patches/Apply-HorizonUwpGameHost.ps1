@@ -17,7 +17,7 @@ function Replace-Required([string]$Text, [string]$Old, [string]$New, [string]$La
 $gamePath = "HorizonEngine/crates/horizon-client/src/game.rs"
 $game = Read-Utf8 $gamePath
 
-$game = Replace-Required $game 'mod event_loop;' 'mod event_loop;' + [string][char]10 + 'pub mod uwp_host;' "register UWP host module"
+$game = Replace-Required $game 'mod event_loop;' ('mod event_loop;' + [string][char]10 + 'pub mod uwp_host;') "register UWP host module"
 
 $oldNewRenderer = @'
     fn new_renderer(&self, window: Arc<Window>) -> Result<Renderer> {
@@ -395,7 +395,7 @@ pub(super) fn run(mut game: Game<'_>, mut host: HostConfig) -> super::Result<()>
     game.replay_line("release", &loop_ctl);
     game.shut_down();
     super::narrator::stop();
-    super::horizon_client::discord_presence::stop();
+    horizon_client::discord_presence::stop();
     super::write_report(&game)?;
     game.error.take().map_or(Ok(()), Err)
 }

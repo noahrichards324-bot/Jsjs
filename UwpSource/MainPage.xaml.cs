@@ -115,6 +115,7 @@ namespace HorizonXboxStarter
         private void Page_Loaded(object sender, RoutedEventArgs e)
         {
             AttachKeyboardHooks();
+            EngineSwapChainPanel.CompositionScaleChanged += EngineSwapChainPanel_CompositionScaleChanged;
             InitializeControlSettings();
             InitializeNativeBridge();
             _controllerTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
@@ -142,6 +143,7 @@ namespace HorizonXboxStarter
                 Window.Current.CoreWindow.KeyUp -= CoreWindow_KeyUp;
                 _coreWindowHooksAttached = false;
             }
+            EngineSwapChainPanel.CompositionScaleChanged -= EngineSwapChainPanel_CompositionScaleChanged;
 
             _pressedKeys.Clear();
             if (_nativeBridgeAvailable)
@@ -795,8 +797,8 @@ namespace HorizonXboxStarter
                     return;
                 }
 
-                uint width = (uint)Math.Max(1.0, EngineSwapChainPanel.ActualWidth);
-                uint height = (uint)Math.Max(1.0, EngineSwapChainPanel.ActualHeight);
+                uint width = GetSurfacePixelWidth();
+                uint height = GetSurfacePixelHeight();
                 _nativeSurfaceHandle = NativeSurfaceCreate(panelNative, width, height);
 
                 if (_nativeSurfaceHandle == IntPtr.Zero)
@@ -824,14 +826,35 @@ namespace HorizonXboxStarter
             }
         }
 
-        private void EngineSwapChainPanel_SizeChanged(object sender, SizeChangedEventArgs e)
+        private uint GetSurfacePixelWidth()
+        {
+            double pixels = EngineSwapChainPanel.ActualWidth * EngineSwapChainPanel.CompositionScaleX;
+            return (uint)Math.Max(1.0, Math.Ceiling(pixels));
+        }
+
+        private uint GetSurfacePixelHeight()
+        {
+            double pixels = EngineSwapChainPanel.ActualHeight * EngineSwapChainPanel.CompositionScaleY;
+            return (uint)Math.Max(1.0, Math.Ceiling(pixels));
+        }
+
+        private void ResizeNativeSurface()
         {
             if (_nativeSurfaceHandle == IntPtr.Zero) return;
-            uint width = (uint)Math.Max(1.0, e.NewSize.Width);
-            uint height = (uint)Math.Max(1.0, e.NewSize.Height);
-            int result = NativeSurfaceResize(_nativeSurfaceHandle, width, height);
+            int result = NativeSurfaceResize(
+                _nativeSurfaceHandle, GetSurfacePixelWidth(), GetSurfacePixelHeight());
             if (result != 0)
                 EngineSurfaceStatusText.Text = "Swap-chain resize failed with bridge error " + result + ".";
+        }
+
+        private void EngineSwapChainPanel_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            ResizeNativeSurface();
+        }
+
+        private void EngineSwapChainPanel_CompositionScaleChanged(SwapChainPanel sender, object args)
+        {
+            ResizeNativeSurface();
         }
 
         private void DestroyNativeSurface()

@@ -1,6 +1,6 @@
 name: Build UWP starter
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.head.ref || github.ref_name }}
+  group: ${{ github.workflow }}-${{ github.ref_name }}
   cancel-in-progress: true
 
 
@@ -12,12 +12,6 @@ on:
       - master
       - xbox-horizon-shell-v2
       - horizon-uwp-engine-port
-  pull_request:
-    branches:
-      - main
-      - master
-      - xbox-horizon-shell-v2
-
 jobs:
   build:
     name: Build Horizon Xbox Starter

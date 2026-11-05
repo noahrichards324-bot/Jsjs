@@ -37,6 +37,13 @@ int32_t horizon_uwp_input_push(uint32_t kind, uint32_t code, uint32_t state, flo
 int32_t horizon_uwp_input_pop(HorizonUwpInputEvent *out_event);
 void horizon_uwp_input_clear(void);
 
+/* SwapChainPanel rendering host. panel is an ISwapChainPanelNative COM pointer. */
+void *horizon_uwp_surface_create(void *panel, uint32_t width, uint32_t height);
+int32_t horizon_uwp_surface_last_error(void);
+int32_t horizon_uwp_surface_resize(void *host, uint32_t width, uint32_t height);
+int32_t horizon_uwp_surface_present(void *host);
+void horizon_uwp_surface_destroy(void *host);
+
 /* Link anchor only; do not call until the UWP-native event loop is implemented. */
 uintptr_t horizon_uwp_engine_entrypoint_address(void);
 

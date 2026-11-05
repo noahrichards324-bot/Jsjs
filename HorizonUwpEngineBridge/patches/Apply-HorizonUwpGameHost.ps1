@@ -9,6 +9,10 @@ function Write-Utf8([string]$Path, [string]$Value) {
     [System.IO.File]::WriteAllText($Path, $Value, [System.Text.UTF8Encoding]::new($false))
 }
 function Replace-Required([string]$Text, [string]$Old, [string]$New, [string]$Label) {
+    $newline = [string][char]10
+    $crlf = [string][char]13 + [string][char]10
+    $Old = $Old.Replace($crlf, $newline)
+    $New = $New.Replace($crlf, $newline)
     if ($Text.Contains($New)) { return $Text }
     if (-not $Text.Contains($Old)) { throw "Could not patch: $Label" }
     return $Text.Replace($Old, $New)

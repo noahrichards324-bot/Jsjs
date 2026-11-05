@@ -75,6 +75,10 @@ namespace HorizonXboxStarter
             ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
         private static extern uint NativeAbiVersion();
 
+        [DllImport("horizon_uwp_engine_bridge.dll", EntryPoint = "horizon_uwp_input_event_size",
+            ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
+        private static extern uint NativeInputEventSize();
+
         [DllImport("horizon_uwp_engine_bridge.dll", EntryPoint = "horizon_uwp_input_push",
             ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
         private static extern int NativeInputPush(uint kind, uint code, uint state, float x, float y);
@@ -162,6 +166,16 @@ namespace HorizonXboxStarter
                 {
                     _nativeBridgeAvailable = false;
                     NativeBridgeStatusText.Text = "Native bridge version mismatch. Expected ABI v2.";
+                    return;
+                }
+
+                uint nativeEventSize = NativeInputEventSize();
+                int managedEventSize = Marshal.SizeOf(typeof(NativeInputEvent));
+                if (nativeEventSize != managedEventSize || nativeEventSize != 20)
+                {
+                    _nativeBridgeAvailable = false;
+                    NativeBridgeStatusText.Text = "Native input layout mismatch. Rust=" +
+                        nativeEventSize + " bytes; app=" + managedEventSize + " bytes.";
                     return;
                 }
 

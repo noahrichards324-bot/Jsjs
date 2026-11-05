@@ -59,6 +59,8 @@
                         Click="NavInput_Click" AutomationProperties.Name="Input test" />
                 <Button x:Name="NavControlsButton" Content="CONTROLS" Style="{StaticResource NavButtonStyle}"
                         Click="NavControls_Click" AutomationProperties.Name="Controls" />
+                <Button x:Name="NavEngineButton" Content="ENGINE TEST" Style="{StaticResource NavButtonStyle}"
+                        Click="NavEngine_Click" AutomationProperties.Name="Engine surface test" />
                 <Button x:Name="NavAboutButton" Content="ABOUT" Style="{StaticResource NavButtonStyle}"
                         Click="NavAbout_Click" AutomationProperties.Name="About" />
 
@@ -284,6 +286,37 @@
                         </Border>
                     </StackPanel>
                 </ScrollViewer>
+
+
+                <!-- UWP DX12 / SwapChainPanel surface test -->
+                <Grid x:Name="EnginePanel" Visibility="Collapsed">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <StackPanel Spacing="10" Margin="0,0,0,14">
+                        <TextBlock Text="NATIVE GRAPHICS TEST" Foreground="{StaticResource AccentBrush}"
+                                   FontSize="13" FontWeight="Bold" />
+                        <TextBlock Text="UWP composition surface" Foreground="{StaticResource MainTextBrush}"
+                                   FontSize="30" FontWeight="Bold" />
+                        <TextBlock Text="This calls the Rust bridge, creates a DirectX 12 swap chain for this XAML SwapChainPanel and presents a test frame. It is not Minecraft gameplay."
+                                   Foreground="{StaticResource MutedTextBrush}" FontSize="15"
+                                   TextWrapping="Wrap" />
+                        <Button x:Name="EngineSurfaceButton" Content="INITIALISE DX12 SURFACE"
+                                Style="{StaticResource PrimaryButtonStyle}" HorizontalAlignment="Left"
+                                Click="EngineSurfaceButton_Click" />
+                        <TextBlock x:Name="EngineSurfaceStatusText" Text="Surface not created yet."
+                                   Foreground="{StaticResource MutedTextBrush}" FontSize="13"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                    <Border Grid.Row="1" Background="{StaticResource PanelAltBrush}"
+                            BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="1"
+                            CornerRadius="14" Padding="2">
+                        <SwapChainPanel x:Name="EngineSwapChainPanel"
+                                        Background="Transparent"
+                                        SizeChanged="EngineSwapChainPanel_SizeChanged" />
+                    </Border>
+                </Grid>
 
                 <!-- About -->
                 <Grid x:Name="AboutPanel" Visibility="Collapsed">

@@ -231,7 +231,15 @@ impl UwpSurfaceHost {
     }
 
     fn present_test_frame(&self) -> Result<(), i32> {
-        let frame = self.surface.get_current_texture().map_err(|_| -6)?;
+        let frame = match self.surface.get_current_texture() {
+            wgpu::CurrentSurfaceTexture::Success(frame)
+            | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => frame,
+            wgpu::CurrentSurfaceTexture::Timeout
+            | wgpu::CurrentSurfaceTexture::Occluded => return Err(-6),
+            wgpu::CurrentSurfaceTexture::Outdated => return Err(-7),
+            wgpu::CurrentSurfaceTexture::Lost => return Err(-8),
+            wgpu::CurrentSurfaceTexture::Validation => return Err(-9),
+        };
         let view = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
         let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("Horizon UWP surface probe"),

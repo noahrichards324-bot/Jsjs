@@ -82,16 +82,16 @@ impl RenderTarget {
 if (-not $gfx.Contains('enum RenderTarget')) {
     $gfx = Replace-Required $gfx 'pub struct Renderer {' ($targetDef + 'pub struct Renderer {') "renderer target type"
 }
-$gfx = Replace-Required $gfx '    display_fresh: bool,' + [string][char]10 + '    window: Arc<Window>,' '    display_fresh: bool,' + [string][char]10 + '    target: RenderTarget,' "renderer target field"
+$gfx = Replace-Required $gfx ('    display_fresh: bool,' + [string][char]10 + '    window: Arc<Window>,') ('    display_fresh: bool,' + [string][char]10 + '    target: RenderTarget,') "renderer target field"
 
-$gfx = Replace-Required $gfx 'async fn open_device(' + [string][char]10 + '    window: &Arc<Window>,' 'async fn open_device(' + [string][char]10 + '    target: &RenderTarget,' "open_device target argument"
+$gfx = Replace-Required $gfx ('async fn open_device(' + [string][char]10 + '    window: &Arc<Window>,') ('async fn open_device(' + [string][char]10 + '    target: &RenderTarget,') "open_device target argument"
 $gfx = Replace-Required $gfx 'open_device_with(window, offscreen, &order, layers, allow_cpu)' 'open_device_with(target, offscreen, &order, layers, allow_cpu)' "open_device delegation"
-$gfx = Replace-Required $gfx 'async fn open_device_with(' + [string][char]10 + '    window: &Arc<Window>,' 'async fn open_device_with(' + [string][char]10 + '    target: &RenderTarget,' "open_device_with target argument"
+$gfx = Replace-Required $gfx ('async fn open_device_with(' + [string][char]10 + '    window: &Arc<Window>,') ('async fn open_device_with(' + [string][char]10 + '    target: &RenderTarget,') "open_device_with target argument"
 $gfx = Replace-Required $gfx 'open_with_retry(backends, window, offscreen, layers, allow_cpu)' 'open_with_retry(backends, target, offscreen, layers, allow_cpu)' "open_with_retry delegation"
-$gfx = Replace-Required $gfx 'async fn open_with_retry(' + [string][char]10 + '    backends: wgpu::Backends,' + [string][char]10 + '    window: &Arc<Window>,' 'async fn open_with_retry(' + [string][char]10 + '    backends: wgpu::Backends,' + [string][char]10 + '    target: &RenderTarget,' "open_with_retry target argument"
+$gfx = Replace-Required $gfx ('async fn open_with_retry(' + [string][char]10 + '    backends: wgpu::Backends,' + [string][char]10 + '    window: &Arc<Window>,') ('async fn open_with_retry(' + [string][char]10 + '    backends: wgpu::Backends,' + [string][char]10 + '    target: &RenderTarget,') "open_with_retry target argument"
 $gfx = Replace-Required $gfx 'open_backend(backends, window, offscreen, false, layers, allow_cpu)' 'open_backend(backends, target, offscreen, false, layers, allow_cpu)' "open_backend first attempt"
 $gfx = Replace-Required $gfx 'open_backend(backends, window, offscreen, true, layers, allow_cpu)' 'open_backend(backends, target, offscreen, true, layers, allow_cpu)' "open_backend retry"
-$gfx = Replace-Required $gfx 'async fn open_backend(' + [string][char]10 + '    backends: wgpu::Backends,' + [string][char]10 + '    window: &Arc<Window>,' 'async fn open_backend(' + [string][char]10 + '    backends: wgpu::Backends,' + [string][char]10 + '    target: &RenderTarget,' "open_backend target argument"
+$gfx = Replace-Required $gfx ('async fn open_backend(' + [string][char]10 + '    backends: wgpu::Backends,' + [string][char]10 + '    window: &Arc<Window>,') ('async fn open_backend(' + [string][char]10 + '    backends: wgpu::Backends,' + [string][char]10 + '    target: &RenderTarget,') "open_backend target argument"
 $gfx = Replace-Required $gfx '        Some(window),' '        target.window(),' "instance descriptor display"
 $gfx = Replace-Required $gfx 'match instance.create_surface(window.clone()) {' 'match target.create_surface(&instance) {' "surface creation"
 
@@ -223,7 +223,7 @@ $gfx = Replace-Required $gfx $oldInit $newInit "renderer target init"
 
 $gfx = Replace-Required $gfx '            let hdr_output = hdr::output(&caps);' '            let hdr_output = if target.window().is_some() { hdr::output(&caps) } else { None };' "disable HDR for UWP panel"
 $gfx = Replace-Required $gfx '                    DisplayWatch::new(&self.window, self.surface.as_deref(), &self.adapter)' '                    if let Some(window) = self.target.window() { DisplayWatch::new(window, self.surface.as_deref(), &self.adapter) } else { (DisplayWatch::default(), None) }' "display watch for UWP"
-$gfx = Replace-Required $gfx '            && !self.frame_gen.paused' '            && !self.frame_gen.paused' + [string][char]10 + '            && self.target.window().is_some()' "disable frame generation for UWP"
+$gfx = Replace-Required $gfx '            && !self.frame_gen.paused' ('            && !self.frame_gen.paused' + [string][char]10 + '            && self.target.window().is_some()') "disable frame generation for UWP"
 $gfx = Replace-Required $gfx '                    &self.window,' '                    self.target.window().expect("frame generation is disabled for UWP panels"),' "frame generation window"
 $gfx = Replace-Required $gfx '            None => self.instance.create_surface(self.window.clone())?,' '            None => self.target.create_surface(&self.instance)?,' "recreate UWP surface"
 $gfx = Replace-Required $gfx '                self.window.pre_present_notify();' '                if let Some(window) = self.target.window() { window.pre_present_notify(); }' "pre-present notify"

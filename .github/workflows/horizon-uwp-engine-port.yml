@@ -1,0 +1,135 @@
+name: Horizon x64 UWP engine port probe
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
+
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - horizon-uwp-engine-port
+    paths:
+      - ".github/workflows/horizon-uwp-engine-port.yml"
+      - "HorizonUwpPort/**"
+      - "HorizonUwpEngineBridge/**"
+
+permissions:
+  contents: read
+
+jobs:
+  rust-uwp-smoke:
+    name: Build a Rust library for x64 UWP
+    runs-on: windows-2022
+    steps:
+      - name: Check out port branch
+        uses: actions/checkout@v4
+
+      - name: Set up MSVC tools
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Install nightly Rust and source
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rust-src
+
+      - name: Build the UWP static library
+        shell: pwsh
+        run: |
+          rustc +nightly --version
+          cargo +nightly build --manifest-path HorizonUwpPort/Cargo.toml --target x86_64-uwp-windows-msvc -Z build-std=std,panic_abort --profile fast
+          if ($LASTEXITCODE -ne 0) { throw "Rust UWP static-library smoke build failed." }
+          Get-ChildItem HorizonUwpPort/target/x86_64-uwp-windows-msvc/fast
+
+  horizon-client-uwp-check:
+    name: Compile the real Horizon client for x64 UWP
+    runs-on: windows-2022
+    steps:
+      - name: Check out port branch
+        uses: actions/checkout@v4
+
+      - name: Check out pinned Horizon source
+        uses: actions/checkout@v4
+        with:
+          repository: horizon-rust/horizon
+          ref: 83ad384f48d0742746d518737511882680aab5b7
+          path: HorizonEngine
+
+      - name: Apply UWP renderer and game-host patches to Horizon
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          ./HorizonUwpEngineBridge/patches/Apply-HorizonUwpRenderer.ps1
+          ./HorizonUwpEngineBridge/patches/Apply-HorizonUwpGameHost.ps1
+
+      - name: Set up MSVC tools
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Install nightly Rust and source
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rust-src
+
+      - name: Record exact toolchain and source versions
+        shell: pwsh
+        run: |
+          rustc +nightly --version --verbose
+          cargo +nightly --version
+          git -C HorizonEngine rev-parse HEAD
+
+      - name: Check Horizon client against the UWP target
+        shell: pwsh
+        run: |
+          cargo +nightly check --manifest-path HorizonEngine/Cargo.toml --package horizon-client --target x86_64-uwp-windows-msvc -Z build-std=std,panic_abort --no-default-features --features system-allocator --locked
+          if ($LASTEXITCODE -ne 0) { throw "The upstream Horizon client does not yet pass the x64 UWP compile check. Review this job's compiler output for the first porting blockers." }
+
+  horizon-engine-bridge-link:
+    name: Link Horizon into an x64 UWP native DLL
+    runs-on: windows-2022
+    steps:
+      - name: Check out port branch
+        uses: actions/checkout@v4
+
+      - name: Check out pinned Horizon source
+        uses: actions/checkout@v4
+        with:
+          repository: horizon-rust/horizon
+          ref: 83ad384f48d0742746d518737511882680aab5b7
+          path: HorizonEngine
+
+      - name: Apply UWP renderer and game-host patches to Horizon
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          ./HorizonUwpEngineBridge/patches/Apply-HorizonUwpRenderer.ps1
+          ./HorizonUwpEngineBridge/patches/Apply-HorizonUwpGameHost.ps1
+
+      - name: Set up MSVC tools
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Install nightly Rust and source
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rust-src
+
+      - name: Build the native engine bridge DLL
+        shell: pwsh
+        run: |
+          cargo +nightly build --manifest-path HorizonUwpEngineBridge/Cargo.toml --target x86_64-uwp-windows-msvc -Z build-std=std,panic_abort --profile fast
+          if ($LASTEXITCODE -ne 0) { throw "Linking Horizon into the x64 UWP DLL failed." }
+          $dll = Join-Path $env:GITHUB_WORKSPACE "HorizonUwpEngineBridge/target/x86_64-uwp-windows-msvc/fast/horizon_uwp_engine_bridge.dll"
+          if (-not (Test-Path -LiteralPath $dll)) { throw "The engine bridge DLL was not produced: $dll" }
+          Get-Item -LiteralPath $dll | Format-List FullName,Length,LastWriteTime
+
+      - name: Upload linked Horizon UWP DLL
+        uses: actions/upload-artifact@v4
+        with:
+          name: HorizonEngine-UWP-x64-DLL
+          path: HorizonUwpEngineBridge/target/x86_64-uwp-windows-msvc/fast/horizon_uwp_engine_bridge.dll
+          if-no-files-found: error

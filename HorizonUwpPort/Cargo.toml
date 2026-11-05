@@ -1,0 +1,19 @@
+[package]
+name = "horizon-uwp-port-probe"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+crate-type = ["staticlib"]
+
+[profile.release]
+panic = "abort"
+lto = "thin"
+
+[profile.fast]
+inherits = "release"
+panic = "abort"
+lto = false
+codegen-units = 16
+incremental = true

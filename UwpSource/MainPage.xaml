@@ -59,6 +59,8 @@
                         Click="NavInput_Click" AutomationProperties.Name="Input test" />
                 <Button x:Name="NavControlsButton" Content="CONTROLS" Style="{StaticResource NavButtonStyle}"
                         Click="NavControls_Click" AutomationProperties.Name="Controls" />
+                <Button x:Name="NavEngineButton" Content="ENGINE TEST" Style="{StaticResource NavButtonStyle}"
+                        Click="NavEngine_Click" AutomationProperties.Name="Engine surface test" />
                 <Button x:Name="NavAboutButton" Content="ABOUT" Style="{StaticResource NavButtonStyle}"
                         Click="NavAbout_Click" AutomationProperties.Name="About" />
 
@@ -117,6 +119,10 @@
                                            FontWeight="SemiBold" TextWrapping="Wrap" />
                                 <TextBlock Text="The app interface is ready for the next integration stage."
                                            Foreground="{StaticResource MutedTextBrush}" FontSize="14"
+                                           TextWrapping="Wrap" />
+                                <TextBlock x:Name="NativeBridgeStatusText"
+                                           Text="Native input bridge: not loaded."
+                                           Foreground="{StaticResource MutedTextBrush}" FontSize="12"
                                            TextWrapping="Wrap" />
                             </StackPanel>
                         </Border>
@@ -280,6 +286,49 @@
                         </Border>
                     </StackPanel>
                 </ScrollViewer>
+
+
+                <!-- UWP DX12 / SwapChainPanel surface test -->
+                <Grid x:Name="EnginePanel" Visibility="Collapsed">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <StackPanel Spacing="10" Margin="0,0,0,14">
+                        <TextBlock Text="NATIVE GRAPHICS TEST" Foreground="{StaticResource AccentBrush}"
+                                   FontSize="13" FontWeight="Bold" />
+                        <TextBlock Text="UWP composition surface" Foreground="{StaticResource MainTextBrush}"
+                                   FontSize="30" FontWeight="Bold" />
+                        <TextBlock Text="Starts the pinned Horizon Rust client on a DirectX 12 SwapChainPanel. First import a prepared resource folder made from your own Minecraft Java Edition files. Online play also needs a legitimate Microsoft/Minecraft sign-in."
+                                   Foreground="{StaticResource MutedTextBrush}" FontSize="15"
+                                   TextWrapping="Wrap" />
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <Button x:Name="ImportResourcesButton" Content="IMPORT RESOURCES"
+                                    Style="{StaticResource NavButtonStyle}" HorizontalAlignment="Left"
+                                    Click="ImportResourcesButton_Click" />
+                            <Button x:Name="EngineSurfaceButton" Content="START HORIZON"
+                                    Style="{StaticResource PrimaryButtonStyle}" HorizontalAlignment="Left"
+                                    Click="EngineSurfaceButton_Click" IsEnabled="False" />
+                        </StackPanel>
+                        <TextBlock x:Name="EngineResourcesStatusText"
+                                   Text="Prepared resources have not been imported."
+                                   Foreground="{StaticResource MutedTextBrush}" FontSize="13"
+                                   TextWrapping="Wrap" />
+                        <TextBlock x:Name="EngineSurfaceStatusText" Text="Horizon is stopped."
+                                   Foreground="{StaticResource MutedTextBrush}" FontSize="13"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                    <Border Grid.Row="1" Background="{StaticResource PanelAltBrush}"
+                            BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="1"
+                            CornerRadius="14" Padding="2">
+                        <SwapChainPanel x:Name="EngineSwapChainPanel"
+                                        SizeChanged="EngineSwapChainPanel_SizeChanged"
+                                        PointerPressed="EngineSwapChainPanel_PointerPressed"
+                                        PointerReleased="EngineSwapChainPanel_PointerReleased"
+                                        PointerMoved="EngineSwapChainPanel_PointerMoved"
+                                        PointerWheelChanged="EngineSwapChainPanel_PointerWheelChanged" />
+                    </Border>
+                </Grid>
 
                 <!-- About -->
                 <Grid x:Name="AboutPanel" Visibility="Collapsed">

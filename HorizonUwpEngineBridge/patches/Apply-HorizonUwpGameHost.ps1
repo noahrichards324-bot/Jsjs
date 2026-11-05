@@ -55,6 +55,7 @@ if ($buildStart -lt 0 -or $buildEnd -lt 0) { throw "Could not locate build_rende
 $build = $game.Substring($buildStart, $buildEnd - $buildStart)
 $uwpBuild = $build.Replace("fn build_renderer(", "fn build_renderer_uwp(")
 $uwpBuild = $uwpBuild.Replace("    window: Arc<Window>,", "    panel: usize," + [string][char]10 + "    size: [u32; 2],")
+$uwpBuild = $uwpBuild.Replace("    offscreen: bool," + [string][char]10, "")
 $uwpBuild = $uwpBuild.Replace("pollster::block_on(Renderer::new(" + [string][char]10 + "        window," + [string][char]10 + "        offscreen,", "pollster::block_on(Renderer::new_uwp(" + [string][char]10 + "        panel," + [string][char]10 + "        size,")
 if ($uwpBuild -notlike '*Renderer::new_uwp(*') { throw "UWP renderer helper clone did not switch to Renderer::new_uwp." }
 if (-not $game.Contains("fn build_renderer_uwp(")) {

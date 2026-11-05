@@ -52,6 +52,11 @@ namespace HorizonXboxStarter
         private bool _coreWindowHooksAttached;
         private GamepadButtons _lastButtons = GamepadButtons.None;
         private bool _nativeBridgeAvailable;
+        private bool _gameRunning;
+        private IntPtr _enginePanelNative = IntPtr.Zero;
+        private bool _engineMouseCaptured;
+        private bool _hasEngineMousePosition;
+        private Windows.Foundation.Point _engineLastMousePosition;
         private IntPtr _nativeSurfaceHandle = IntPtr.Zero;
         private const uint NativeKeyEvent = 1;
         private const uint NativeMouseButtonEvent = 2;
@@ -90,6 +95,22 @@ namespace HorizonXboxStarter
         [DllImport("horizon_uwp_engine_bridge.dll", EntryPoint = "horizon_uwp_input_clear",
             ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
         private static extern void NativeInputClear();
+
+        [DllImport("horizon_uwp_engine_bridge.dll", EntryPoint = "horizon_uwp_game_start",
+            ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
+        private static extern int NativeGameStart(IntPtr panel, uint width, uint height);
+
+        [DllImport("horizon_uwp_engine_bridge.dll", EntryPoint = "horizon_uwp_game_input_push",
+            ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
+        private static extern int NativeGameInputPush(uint kind, uint code, uint state, float x, float y);
+
+        [DllImport("horizon_uwp_engine_bridge.dll", EntryPoint = "horizon_uwp_game_stop",
+            ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
+        private static extern void NativeGameStop();
+
+        [DllImport("horizon_uwp_engine_bridge.dll", EntryPoint = "horizon_uwp_game_is_running",
+            ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
+        private static extern uint NativeGameIsRunning();
 
         [DllImport("horizon_uwp_engine_bridge.dll", EntryPoint = "horizon_uwp_surface_create",
             ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
@@ -145,6 +166,7 @@ namespace HorizonXboxStarter
             {
                 Window.Current.CoreWindow.KeyDown -= CoreWindow_KeyDown;
                 Window.Current.CoreWindow.KeyUp -= CoreWindow_KeyUp;
+                Window.Current.CoreWindow.Activated -= CoreWindow_Activated;
                 _coreWindowHooksAttached = false;
             }
             EngineSwapChainPanel.CompositionScaleChanged -= EngineSwapChainPanel_CompositionScaleChanged;
@@ -162,10 +184,10 @@ namespace HorizonXboxStarter
             try
             {
                 uint version = NativeAbiVersion();
-                if (version != 2)
+                if (version != 3)
                 {
                     _nativeBridgeAvailable = false;
-                    NativeBridgeStatusText.Text = "Native bridge version mismatch. Expected ABI v2.";
+                    NativeBridgeStatusText.Text = "Native bridge version mismatch. Expected ABI v3.";
                     return;
                 }
 
@@ -182,7 +204,7 @@ namespace HorizonXboxStarter
                 NativeInputClear();
                 _nativeBridgeAvailable = true;
                 NativeBridgeStatusText.Text =
-                    "Native input ABI v2 ready. This tests event transport only; Minecraft gameplay is not connected.";
+                    "Native bridge ABI v3 ready. Horizon renderer, game host and input APIs are present.";
             }
             catch (DllNotFoundException)
             {
@@ -242,6 +264,7 @@ namespace HorizonXboxStarter
 
             Window.Current.CoreWindow.KeyDown += CoreWindow_KeyDown;
             Window.Current.CoreWindow.KeyUp += CoreWindow_KeyUp;
+            Window.Current.CoreWindow.Activated += CoreWindow_Activated;
             _coreWindowHooksAttached = true;
         }
 
@@ -250,6 +273,13 @@ namespace HorizonXboxStarter
             bool wasAlreadyDown = _pressedKeys.Contains(args.VirtualKey);
             _pressedKeys.Add(args.VirtualKey);
             ShowMappedKeyAction(args.VirtualKey);
+
+            if (_currentPage == "engine" && _gameRunning)
+            {
+                SendGameInput(NativeKeyEvent, (uint)args.VirtualKey, wasAlreadyDown ? 2u : 1u, 0.0f, 0.0f);
+                args.Handled = true;
+                return;
+            }
 
             if (_currentPage == "input")
             {
@@ -297,6 +327,12 @@ namespace HorizonXboxStarter
         private void CoreWindow_KeyUp(CoreWindow sender, KeyEventArgs args)
         {
             _pressedKeys.Remove(args.VirtualKey);
+            if (_currentPage == "engine" && _gameRunning)
+            {
+                SendGameInput(NativeKeyEvent, (uint)args.VirtualKey, 0, 0.0f, 0.0f);
+                args.Handled = true;
+                return;
+            }
             if (_currentPage == "input")
             {
                 KeyText.Text = args.VirtualKey.ToString();
@@ -420,6 +456,25 @@ namespace HorizonXboxStarter
         private void ControllerTimer_Tick(object sender, object e)
         {
             UpdateControllerDisplay();
+            if (_gameRunning)
+            {
+                try
+                {
+                    _gameRunning = NativeGameIsRunning() != 0;
+                    if (!_gameRunning)
+                    {
+                        EngineSurfaceButton.Content = "START HORIZON";
+                        EngineSurfaceStatusText.Text =
+                            "Horizon stopped. Check the game status and local files if it did not reach the title screen.";
+                        _engineMouseCaptured = false;
+                        _hasEngineMousePosition = false;
+                    }
+                }
+                catch
+                {
+                    _gameRunning = false;
+                }
+            }
         }
 
         private void UpdateControllerDisplay()
@@ -457,6 +512,25 @@ namespace HorizonXboxStarter
                 TestNativeInputRoundTrip(NativeGamepadAxisEvent, 2, 0,
                     (float)reading.LeftTrigger, (float)reading.RightTrigger);
             }
+            else if (_currentPage == "engine" && _gameRunning)
+            {
+                foreach (GamepadButtons button in Enum.GetValues(typeof(GamepadButtons)))
+                {
+                    if (button == GamepadButtons.None) continue;
+                    bool wasPressed = (_lastButtons & button) == button;
+                    bool isPressed = (reading.Buttons & button) == button;
+                    if (wasPressed != isPressed)
+                        SendGameInput(NativeGamepadButtonEvent, (uint)button,
+                            isPressed ? 1u : 0u, 0.0f, 0.0f);
+                }
+
+                SendGameInput(NativeGamepadAxisEvent, 0, 0,
+                    (float)reading.LeftThumbstickX, (float)reading.LeftThumbstickY);
+                SendGameInput(NativeGamepadAxisEvent, 1, 0,
+                    (float)reading.RightThumbstickX, (float)reading.RightThumbstickY);
+                SendGameInput(NativeGamepadAxisEvent, 2, 0,
+                    (float)reading.LeftTrigger, (float)reading.RightTrigger);
+            }
             ControllerButtonsText.Text = "Buttons: " +
                 (reading.Buttons == GamepadButtons.None ? "None" : reading.Buttons.ToString());
             ControllerAxesText.Text = string.Format(
@@ -472,7 +546,7 @@ namespace HorizonXboxStarter
 
             _lastButtons = reading.Buttons;
 
-            if (backPressed && _currentPage != "home")
+            if (backPressed && _currentPage != "home" && !_gameRunning)
             {
                 ShowPanel("home");
                 NavHomeButton.Focus(FocusState.Programmatic);
@@ -779,20 +853,102 @@ namespace HorizonXboxStarter
         }
 
 
+        private void SendGameInput(uint kind, uint code, uint state, float x, float y)
+        {
+            if (!_nativeBridgeAvailable || !_gameRunning) return;
+            try
+            {
+                int result = NativeGameInputPush(kind, code, state, x, y);
+                if (result != 0 && result != -3)
+                    EngineSurfaceStatusText.Text = "Game input queue returned " + result + ".";
+            }
+            catch (Exception ex)
+            {
+                EngineSurfaceStatusText.Text = "Game input failed: " + ex.GetType().Name;
+            }
+        }
+
+        private void CoreWindow_Activated(CoreWindow sender, WindowActivatedEventArgs args)
+        {
+            if (!_gameRunning) return;
+            uint focused = args.WindowActivationState == CoreWindowActivationState.Deactivated ? 0u : 1u;
+            SendGameInput(7, 0, focused, 0.0f, 0.0f);
+            if (focused == 0)
+            {
+                _engineMouseCaptured = false;
+                _hasEngineMousePosition = false;
+            }
+        }
+
+        private void EngineSwapChainPanel_PointerPressed(object sender, PointerRoutedEventArgs e)
+        {
+            if (!_gameRunning) return;
+            var point = e.GetCurrentPoint(EngineSwapChainPanel);
+            if (point.PointerDevice.PointerDeviceType.ToString() != "Mouse") return;
+            string button = GetMouseButtonName(point.Properties.PointerUpdateKind.ToString());
+            uint code = GetMouseButtonCode(button);
+            if (code != 0) SendGameInput(NativeMouseButtonEvent, code, 1, 0.0f, 0.0f);
+            EngineSwapChainPanel.CapturePointer(e.Pointer);
+            _engineMouseCaptured = true;
+            _engineLastMousePosition = point.Position;
+            _hasEngineMousePosition = true;
+            e.Handled = true;
+        }
+
+        private void EngineSwapChainPanel_PointerReleased(object sender, PointerRoutedEventArgs e)
+        {
+            if (!_gameRunning) return;
+            var point = e.GetCurrentPoint(EngineSwapChainPanel);
+            if (point.PointerDevice.PointerDeviceType.ToString() != "Mouse") return;
+            string button = GetMouseButtonName(point.Properties.PointerUpdateKind.ToString());
+            uint code = GetMouseButtonCode(button);
+            if (code != 0) SendGameInput(NativeMouseButtonEvent, code, 0, 0.0f, 0.0f);
+            EngineSwapChainPanel.ReleasePointerCaptures();
+            _engineMouseCaptured = false;
+            _hasEngineMousePosition = false;
+            e.Handled = true;
+        }
+
+        private void EngineSwapChainPanel_PointerMoved(object sender, PointerRoutedEventArgs e)
+        {
+            if (!_gameRunning || !_engineMouseCaptured) return;
+            var point = e.GetCurrentPoint(EngineSwapChainPanel);
+            if (point.PointerDevice.PointerDeviceType.ToString() != "Mouse") return;
+            if (_hasEngineMousePosition)
+            {
+                double dx = (point.Position.X - _engineLastMousePosition.X) * _mouseSensitivity;
+                double dy = (point.Position.Y - _engineLastMousePosition.Y) * _mouseSensitivity;
+                if (_invertMouseY) dy = -dy;
+                SendGameInput(NativeMouseMoveEvent, 0, 0, (float)dx, (float)dy);
+            }
+            _engineLastMousePosition = point.Position;
+            _hasEngineMousePosition = true;
+            e.Handled = true;
+        }
+
+        private void EngineSwapChainPanel_PointerWheelChanged(object sender, PointerRoutedEventArgs e)
+        {
+            if (!_gameRunning) return;
+            var point = e.GetCurrentPoint(EngineSwapChainPanel);
+            if (point.PointerDevice.PointerDeviceType.ToString() != "Mouse") return;
+            float delta = point.Properties.MouseWheelDelta / 120.0f;
+            SendGameInput(NativeMouseWheelEvent, 0, 0, 0.0f, delta);
+            e.Handled = true;
+        }
+
         private void EngineSurfaceButton_Click(object sender, RoutedEventArgs e)
         {
             if (!_nativeBridgeAvailable)
             {
-                EngineSurfaceStatusText.Text = "The Rust bridge DLL is not available in this package.";
+                EngineSurfaceStatusText.Text = "The native Horizon bridge is not available in this package.";
                 return;
             }
 
-            if (_nativeSurfaceHandle != IntPtr.Zero)
+            if (_gameRunning)
             {
-                int result = NativeSurfacePresent(_nativeSurfaceHandle);
-                EngineSurfaceStatusText.Text = result == 0
-                    ? "DX12 SwapChainPanel frame presented successfully."
-                    : "Present failed with bridge error " + result + ".";
+                NativeGameStop();
+                EngineSurfaceStatusText.Text = "Stopping Horizon and saving the current world...";
+                EngineSurfaceButton.Content = "STOPPING...";
                 return;
             }
 
@@ -800,38 +956,49 @@ namespace HorizonXboxStarter
             IntPtr panelNative = IntPtr.Zero;
             try
             {
+                try
+                {
+                    System.IO.Directory.SetCurrentDirectory(ApplicationData.Current.LocalFolder.Path);
+                }
+                catch
+                {
+                    // The host still uses the app's current working directory if this
+                    // platform build does not permit changing it.
+                }
+
                 unknown = Marshal.GetIUnknownForObject(EngineSwapChainPanel);
                 Guid panelInterfaceId = new Guid("63AAD0B8-7C24-40FF-85A8-640D944CC325");
                 int queryResult = Marshal.QueryInterface(unknown, ref panelInterfaceId, out panelNative);
                 if (queryResult < 0 || panelNative == IntPtr.Zero)
                 {
                     EngineSurfaceStatusText.Text =
-                        "Could not obtain ISwapChainPanelNative. HRESULT: 0x" +
-                        queryResult.ToString("X8");
+                        "Could not obtain ISwapChainPanelNative. HRESULT: 0x" + queryResult.ToString("X8");
                     return;
                 }
 
                 uint width = GetSurfacePixelWidth();
                 uint height = GetSurfacePixelHeight();
-                _nativeSurfaceHandle = NativeSurfaceCreate(panelNative, width, height);
-
-                if (_nativeSurfaceHandle == IntPtr.Zero)
+                int startResult = NativeGameStart(panelNative, width, height);
+                if (startResult != 0)
                 {
-                    int error = NativeSurfaceLastError();
-                    EngineSurfaceStatusText.Text =
-                        "DX12 surface creation failed. Bridge error: " + error +
-                        ". Check Xbox graphics/API support.";
+                    EngineSurfaceStatusText.Text = "Horizon could not start. Native host error: " + startResult;
                     return;
                 }
 
+                // Keep the QueryInterface reference alive while the Rust render
+                // thread creates its wgpu surface from the panel.
+                _enginePanelNative = panelNative;
+                panelNative = IntPtr.Zero;
+                _gameRunning = true;
+                EngineSurfaceButton.Content = "STOP HORIZON";
                 EngineSurfaceStatusText.Text =
-                    "DX12 SwapChainPanel surface is active. A test frame was presented; Minecraft is not rendering yet.";
-                EngineSurfaceButton.Content = "PRESENT TEST FRAME";
+                    "Horizon is starting. It needs valid Minecraft Java resources in this app's local storage.";
+                ShowPanel("engine");
             }
             catch (Exception ex)
             {
                 EngineSurfaceStatusText.Text =
-                    "Surface test could not start: " + ex.GetType().Name + " — " + ex.Message;
+                    "Horizon startup failed: " + ex.GetType().Name + " — " + ex.Message;
             }
             finally
             {
@@ -854,6 +1021,9 @@ namespace HorizonXboxStarter
 
         private void ResizeNativeSurface()
         {
+            if (_gameRunning)
+                SendGameInput(8, 0, 0, GetSurfacePixelWidth(), GetSurfacePixelHeight());
+
             if (_nativeSurfaceHandle == IntPtr.Zero) return;
             int result = NativeSurfaceResize(
                 _nativeSurfaceHandle, GetSurfacePixelWidth(), GetSurfacePixelHeight());
@@ -873,6 +1043,11 @@ namespace HorizonXboxStarter
 
         private void DestroyNativeSurface()
         {
+            if (_gameRunning)
+            {
+                try { NativeGameStop(); } catch { }
+                _gameRunning = false;
+            }
             if (_nativeSurfaceHandle == IntPtr.Zero) return;
             try { NativeSurfaceDestroy(_nativeSurfaceHandle); } catch { }
             _nativeSurfaceHandle = IntPtr.Zero;

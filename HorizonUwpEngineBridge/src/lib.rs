@@ -160,6 +160,8 @@ pub extern "C" fn horizon_uwp_engine_entrypoint_address() -> usize {
 
 static GAME_RUNNING: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
+static LAST_GAME_ERROR: std::sync::atomic::AtomicI32 =
+    std::sync::atomic::AtomicI32::new(0);
 
 /// Start the actual Horizon client using the supplied UWP SwapChainPanel.
 ///
@@ -190,6 +192,7 @@ pub unsafe extern "C" fn horizon_uwp_game_start(
         GAME_RUNNING.store(false, std::sync::atomic::Ordering::Release);
         return -3;
     }
+    LAST_GAME_ERROR.store(0, std::sync::atomic::Ordering::Release);
 
     match std::thread::Builder::new()
         .name("Horizon UWP game thread".to_owned())
@@ -197,7 +200,12 @@ pub unsafe extern "C" fn horizon_uwp_game_start(
             // This is the same native startup path used by the Horizon client.
             // Its normal Microsoft/Minecraft sign-in and entitlement behaviour
             // is preserved; this bridge does not synthesize an authenticated user.
-            horizon_client::entry::main_with(Default::default());
+            if let Err(error) = horizon_client::entry::main_with_embedded(Default::default()) {
+                // Preserve a compact error code for the UWP UI. Detailed logs
+                // stay in the app's local game folder.
+                LAST_GAME_ERROR.store(-5, std::sync::atomic::Ordering::Release);
+                let _ = error;
+            }
             GAME_RUNNING.store(false, std::sync::atomic::Ordering::Release);
         })
     {
@@ -232,6 +240,13 @@ pub extern "C" fn horizon_uwp_game_input_push(
 #[unsafe(no_mangle)]
 pub extern "C" fn horizon_uwp_game_stop() {
     horizon_client::game::uwp_host::request_stop();
+}
+
+
+/// Last embedded startup/runtime error code; zero means no error was reported.
+#[unsafe(no_mangle)]
+pub extern "C" fn horizon_uwp_game_last_error() -> i32 {
+    LAST_GAME_ERROR.load(std::sync::atomic::Ordering::Acquire)
 }
 
 /// Returns 1 while the Horizon game thread is running, otherwise 0.

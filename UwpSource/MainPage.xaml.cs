@@ -4,6 +4,9 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using Windows.Gaming.Input;
 using Windows.Storage;
+using Windows.Storage.Pickers;
+using System.IO;
+using System.Threading.Tasks;
 using Windows.UI.Xaml.Controls.Primitives;
 using Windows.System;
 using Windows.UI.Core;
@@ -147,6 +150,7 @@ namespace HorizonXboxStarter
             EngineSwapChainPanel.CompositionScaleChanged += EngineSwapChainPanel_CompositionScaleChanged;
             InitializeControlSettings();
             InitializeNativeBridge();
+            CheckHorizonResources();
             _controllerTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
             _controllerTimer.Tick += ControllerTimer_Tick;
             _controllerTimer.Start();
@@ -859,6 +863,105 @@ namespace HorizonXboxStarter
             BuildKeyBindingEditors();
         }
 
+
+        private async void ImportResourcesButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_gameRunning)
+            {
+                EngineResourcesStatusText.Text = "Stop Horizon before replacing its resources.";
+                return;
+            }
+
+            var picker = new FolderPicker
+            {
+                SuggestedStartLocation = PickerLocationId.RemovableDevices
+            };
+            picker.FileTypeFilter.Add("*");
+
+            try
+            {
+                EngineResourcesStatusText.Text = "Choose the prepared Horizon resources folder.";
+                StorageFolder source = await picker.PickSingleFolderAsync();
+                if (source == null)
+                {
+                    EngineResourcesStatusText.Text = "Resource import cancelled.";
+                    return;
+                }
+
+                var manifest = await source.TryGetItemAsync("horizon-resources.json");
+                if (!(manifest is StorageFile))
+                {
+                    EngineResourcesStatusText.Text =
+                        "That folder is not a prepared Horizon resources folder: horizon-resources.json was not found.";
+                    return;
+                }
+
+                StorageFolder local = ApplicationData.Current.LocalFolder;
+                StorageFolder dotLocal = await local.CreateFolderAsync(".local", CreationCollisionOption.OpenIfExists);
+                StorageFolder clientFolder = await dotLocal.CreateFolderAsync("horizon-client", CreationCollisionOption.OpenIfExists);
+                StorageFolder versionFolder = await clientFolder.CreateFolderAsync("26.3", CreationCollisionOption.OpenIfExists);
+
+                EngineResourcesStatusText.Text = "Copying prepared resources into the app's local storage...";
+                await CopyResourceFolderAsync(source, versionFolder);
+
+                var copiedManifest = await versionFolder.TryGetItemAsync("horizon-resources.json");
+                if (copiedManifest is StorageFile)
+                {
+                    EngineResourcesStatusText.Text =
+                        "Prepared resources imported. Horizon can now check them during startup.";
+                    EngineSurfaceButton.IsEnabled = true;
+                }
+                else
+                {
+                    EngineResourcesStatusText.Text =
+                        "Import finished, but the prepared resources manifest is missing from the destination.";
+                    EngineSurfaceButton.IsEnabled = false;
+                }
+            }
+            catch (Exception ex)
+            {
+                EngineResourcesStatusText.Text =
+                    "Resource import failed: " + ex.GetType().Name + " — " + ex.Message;
+            }
+        }
+
+        private async Task CopyResourceFolderAsync(StorageFolder source, StorageFolder destination)
+        {
+            var files = await source.GetFilesAsync();
+            foreach (StorageFile file in files)
+            {
+                await file.CopyAsync(destination, file.Name, NameCollisionOption.ReplaceExisting);
+            }
+
+            var folders = await source.GetFoldersAsync();
+            foreach (StorageFolder folder in folders)
+            {
+                StorageFolder child = await destination.CreateFolderAsync(
+                    folder.Name, CreationCollisionOption.OpenIfExists);
+                await CopyResourceFolderAsync(folder, child);
+            }
+        }
+
+        private async void CheckHorizonResources()
+        {
+            try
+            {
+                string manifestPath = Path.Combine(
+                    ApplicationData.Current.LocalFolder.Path,
+                    ".local", "horizon-client", "26.3", "horizon-resources.json");
+                bool ready = File.Exists(manifestPath);
+                EngineSurfaceButton.IsEnabled = ready;
+                EngineResourcesStatusText.Text = ready
+                    ? "Prepared Horizon resources are present in app storage."
+                    : "No prepared resources found. Import a folder prepared from your own Minecraft Java files.";
+                await Task.CompletedTask;
+            }
+            catch (Exception ex)
+            {
+                EngineSurfaceButton.IsEnabled = false;
+                EngineResourcesStatusText.Text = "Could not check resources: " + ex.Message;
+            }
+        }
 
         private void SendGameInput(uint kind, uint code, uint state, float x, float y)
         {

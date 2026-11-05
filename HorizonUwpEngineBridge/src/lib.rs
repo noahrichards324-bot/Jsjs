@@ -135,6 +135,12 @@ pub extern "C" fn horizon_uwp_input_clear() {
     with_queue(|events| events.clear());
 }
 
+/// Size of the C ABI input structure, used to verify the host's P/Invoke layout.
+#[unsafe(no_mangle)]
+pub extern "C" fn horizon_uwp_input_event_size() -> u32 {
+    std::mem::size_of::<UwpInputEvent>() as u32
+}
+
 /// Number of queued input events (diagnostics only).
 #[unsafe(no_mangle)]
 pub extern "C" fn horizon_uwp_input_pending() -> u32 {

@@ -9,6 +9,8 @@ crate-type = ["cdylib"]
 
 [dependencies]
 horizon-client = { path = "../HorizonEngine/crates/horizon-client", default-features = false, features = ["system-allocator"] }
+wgpu = { version = "30.0.1", default-features = false, features = ["std", "parking_lot", "dx12"] }
+pollster = "0.4"
 
 # Keep Horizon's workspace-specific dependency patches in effect when this
 # bridge is built as a separate top-level Cargo package.

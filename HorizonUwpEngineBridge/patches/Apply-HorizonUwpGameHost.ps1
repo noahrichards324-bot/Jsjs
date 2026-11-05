@@ -74,6 +74,26 @@ fn run_event_loop(mut game: Game<'_>) -> Result<()> {
 '@
 $game = Replace-Required $game $oldRunLoop $newRunLoop "route configured UWP game to host loop"
 
+$runWith = @'
+pub fn run_with() -> Result<()> {
+    let Some(mut options) = Options::read()? else {
+        return Ok(());
+    };
+'@
+$newRunWith = @'
+pub fn run_with() -> Result<()> {
+    let Some(mut options) = Options::read()? else {
+        return Ok(());
+    };
+    if uwp_host::is_configured() {
+        // The UWP host supplies its own SwapChainPanel renderer and frame loop.
+        // Headless startup avoids creating the desktop winit loading window.
+        options.headless = true;
+        options.offscreen = false;
+    }
+'@
+$game = Replace-Required $game $runWith $newRunWith "select synchronous UWP startup"
+
 Write-Utf8 $gamePath $game
 
 $hostPath = "HorizonEngine/crates/horizon-client/src/game/uwp_host.rs"
@@ -138,6 +158,11 @@ pub fn configure(panel: usize, width: u32, height: u32) -> bool {
     STOP.store(false, Ordering::Release);
     events().lock().unwrap_or_else(std::sync::PoisonError::into_inner).clear();
     true
+}
+
+/// True while a native host has registered a SwapChainPanel for this process.
+pub fn is_configured() -> bool {
+    config_slot().lock().unwrap_or_else(std::sync::PoisonError::into_inner).is_some()
 }
 
 /// Push one keyboard/mouse/controller/resize event from the UWP host.

@@ -16,7 +16,7 @@ const INPUT_QUEUE_CAPACITY: usize = 4096;
 /// ABI version. Increment when the public C layout or function contract changes.
 #[unsafe(no_mangle)]
 pub extern "C" fn horizon_uwp_engine_bridge_abi_version() -> u32 {
-    2
+    3
 }
 
 /// Stable event kinds used by the UWP host.
@@ -156,6 +156,89 @@ pub extern "C" fn horizon_uwp_engine_entrypoint_address() -> usize {
     horizon_client::entry::main as usize
 }
 
+
+
+static GAME_RUNNING: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// Start the actual Horizon client using the supplied UWP SwapChainPanel.
+///
+/// The panel pointer must be an ISwapChainPanelNative COM interface pointer.
+/// The caller must keep its COM reference alive until the game host has
+/// created the wgpu surface. Returns 0 on accepted startup, a negative code
+/// if a game is already running, parameters are invalid, or the thread fails
+/// to start.
+///
+/// # Safety
+/// `panel` must be a live ISwapChainPanelNative interface pointer.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn horizon_uwp_game_start(
+    panel: *mut c_void,
+    width: u32,
+    height: u32,
+) -> i32 {
+    if panel.is_null() || width == 0 || height == 0 {
+        return -1;
+    }
+    if GAME_RUNNING
+        .compare_exchange(false, true, std::sync::atomic::Ordering::AcqRel, std::sync::atomic::Ordering::Acquire)
+        .is_err()
+    {
+        return -2;
+    }
+    if !horizon_client::game::uwp_host::configure(panel as usize, width, height) {
+        GAME_RUNNING.store(false, std::sync::atomic::Ordering::Release);
+        return -3;
+    }
+
+    match std::thread::Builder::new()
+        .name("Horizon UWP game thread".to_owned())
+        .spawn(|| {
+            // This is the same native startup path used by the Horizon client.
+            // Its normal Microsoft/Minecraft sign-in and entitlement behaviour
+            // is preserved; this bridge does not synthesize an authenticated user.
+            horizon_client::entry::main_with(Default::default());
+            GAME_RUNNING.store(false, std::sync::atomic::Ordering::Release);
+        })
+    {
+        Ok(_thread) => 0,
+        Err(_) => {
+            horizon_client::game::uwp_host::request_stop();
+            GAME_RUNNING.store(false, std::sync::atomic::Ordering::Release);
+            -4
+        }
+    }
+}
+
+/// Queue one keyboard, mouse, controller, resize or text event for Horizon's game loop.
+///
+/// Event kinds and codes are documented in the native header. This queue is
+/// consumed by the engine host, not the input-test diagnostics queue.
+#[unsafe(no_mangle)]
+pub extern "C" fn horizon_uwp_game_input_push(
+    kind: u32,
+    code: u32,
+    state: u32,
+    x: f32,
+    y: f32,
+) -> i32 {
+    if !GAME_RUNNING.load(std::sync::atomic::Ordering::Acquire) {
+        return -3;
+    }
+    horizon_client::game::uwp_host::push_input(kind, code, state, x, y)
+}
+
+/// Ask the game thread to release held input, save and shut down.
+#[unsafe(no_mangle)]
+pub extern "C" fn horizon_uwp_game_stop() {
+    horizon_client::game::uwp_host::request_stop();
+}
+
+/// Returns 1 while the Horizon game thread is running, otherwise 0.
+#[unsafe(no_mangle)]
+pub extern "C" fn horizon_uwp_game_is_running() -> u32 {
+    GAME_RUNNING.load(std::sync::atomic::Ordering::Acquire) as u32
+}
 
 /// A native DX12 surface attached to a XAML SwapChainPanel.
 ///
@@ -422,6 +505,6 @@ mod tests {
 
     #[test]
     fn abi_version_is_current() {
-        assert_eq!(horizon_uwp_engine_bridge_abi_version(), 2);
+        assert_eq!(horizon_uwp_engine_bridge_abi_version(), 3);
     }
 }

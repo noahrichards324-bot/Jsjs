@@ -25,14 +25,6 @@ jobs:
       - name: Check out port branch
         uses: actions/checkout@v4
 
-      - name: Apply UWP renderer and game-host patches to Horizon
-        shell: pwsh
-        run: |
-          ./HorizonUwpEngineBridge/patches/Apply-HorizonUwpRenderer.ps1
-          if ($LASTEXITCODE -ne 0) { throw "Horizon renderer UWP patch failed." }
-          ./HorizonUwpEngineBridge/patches/Apply-HorizonUwpGameHost.ps1
-          if ($LASTEXITCODE -ne 0) { throw "Horizon game-host UWP patch failed." }
-
       - name: Set up MSVC tools
         uses: ilammy/msvc-dev-cmd@v1
         with:
@@ -64,6 +56,14 @@ jobs:
           repository: horizon-rust/horizon
           ref: 83ad384f48d0742746d518737511882680aab5b7
           path: HorizonEngine
+
+      - name: Apply UWP renderer and game-host patches to Horizon
+        shell: pwsh
+        run: |
+          ./HorizonUwpEngineBridge/patches/Apply-HorizonUwpRenderer.ps1
+          if ($LASTEXITCODE -ne 0) { throw "Horizon renderer UWP patch failed." }
+          ./HorizonUwpEngineBridge/patches/Apply-HorizonUwpGameHost.ps1
+          if ($LASTEXITCODE -ne 0) { throw "Horizon game-host UWP patch failed." }
 
       - name: Set up MSVC tools
         uses: ilammy/msvc-dev-cmd@v1
@@ -101,6 +101,14 @@ jobs:
           repository: horizon-rust/horizon
           ref: 83ad384f48d0742746d518737511882680aab5b7
           path: HorizonEngine
+
+      - name: Apply UWP renderer and game-host patches to Horizon
+        shell: pwsh
+        run: |
+          ./HorizonUwpEngineBridge/patches/Apply-HorizonUwpRenderer.ps1
+          if ($LASTEXITCODE -ne 0) { throw "Horizon renderer UWP patch failed." }
+          ./HorizonUwpEngineBridge/patches/Apply-HorizonUwpGameHost.ps1
+          if ($LASTEXITCODE -ne 0) { throw "Horizon game-host UWP patch failed." }
 
       - name: Set up MSVC tools
         uses: ilammy/msvc-dev-cmd@v1

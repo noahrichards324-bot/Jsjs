@@ -97,6 +97,50 @@ $game = Replace-Required $game $runWith $newRunWith "select synchronous UWP star
 
 Write-Utf8 $gamePath $game
 
+
+$entryPath = "HorizonEngine/crates/horizon-client/src/entry.rs"
+$entry = Read-Utf8 $entryPath
+$oldEntry = @'
+pub fn main_with(mods: crate::mod_api::Mods) {
+    // First: a trait injection into anything below (logging, the crash handler) calls its mod.
+'@
+$newEntry = @'
+pub fn main_with(mods: crate::mod_api::Mods) {
+    if let Err(error) = main_with_embedded(mods) {
+        std::process::exit(if error.is::<game::UsageError>() {
+            game::exit_code::USAGE
+        } else {
+            game::exit_code::ERROR
+        });
+    }
+}
+
+/// Entry point for an app-hosted client. Unlike the executable wrapper, this
+/// returns startup errors to the native host instead of terminating the process.
+pub fn main_with_embedded(mods: crate::mod_api::Mods) -> horizon_client::Result<()> {
+    // First: a trait injection into anything below (logging, the crash handler) calls its mod.
+'@
+$entry = Replace-Required $entry $oldEntry $newEntry "embedded non-exiting entrypoint"
+$oldExit = @'
+        std::process::exit(if usage {
+            game::exit_code::USAGE
+        } else {
+            game::exit_code::ERROR
+        });
+    }
+    logging::flush();
+}
+'@
+$newExit = @'
+        return Err(error);
+    }
+    logging::flush();
+    Ok(())
+}
+'@
+$entry = Replace-Required $entry $oldExit $newExit "return embedded startup errors"
+Write-Utf8 $entryPath $entry
+
 $hostPath = "HorizonEngine/crates/horizon-client/src/game/uwp_host.rs"
 $hostCode = @'
  //! UWP host loop: Horizon's own game state and renderer driven by a XAML SwapChainPanel.

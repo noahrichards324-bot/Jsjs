@@ -104,10 +104,9 @@ jobs:
       - name: Apply UWP renderer and game-host patches to Horizon
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
           ./HorizonUwpEngineBridge/patches/Apply-HorizonUwpRenderer.ps1
-          if ($LASTEXITCODE -ne 0) { throw "Horizon renderer UWP patch failed." }
           ./HorizonUwpEngineBridge/patches/Apply-HorizonUwpGameHost.ps1
-          if ($LASTEXITCODE -ne 0) { throw "Horizon game-host UWP patch failed." }
 
       - name: Set up MSVC tools
         uses: ilammy/msvc-dev-cmd@v1

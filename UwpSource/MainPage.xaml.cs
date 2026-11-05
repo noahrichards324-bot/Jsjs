@@ -52,6 +52,7 @@ namespace HorizonXboxStarter
         private bool _coreWindowHooksAttached;
         private GamepadButtons _lastButtons = GamepadButtons.None;
         private bool _nativeBridgeAvailable;
+        private IntPtr _nativeSurfaceHandle = IntPtr.Zero;
         private const uint NativeKeyEvent = 1;
         private const uint NativeMouseButtonEvent = 2;
         private const uint NativeMouseMoveEvent = 3;
@@ -85,6 +86,26 @@ namespace HorizonXboxStarter
         [DllImport("horizon_uwp_engine_bridge.dll", EntryPoint = "horizon_uwp_input_clear",
             ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
         private static extern void NativeInputClear();
+
+        [DllImport("horizon_uwp_engine_bridge.dll", EntryPoint = "horizon_uwp_surface_create",
+            ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
+        private static extern IntPtr NativeSurfaceCreate(IntPtr panel, uint width, uint height);
+
+        [DllImport("horizon_uwp_engine_bridge.dll", EntryPoint = "horizon_uwp_surface_last_error",
+            ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
+        private static extern int NativeSurfaceLastError();
+
+        [DllImport("horizon_uwp_engine_bridge.dll", EntryPoint = "horizon_uwp_surface_resize",
+            ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
+        private static extern int NativeSurfaceResize(IntPtr host, uint width, uint height);
+
+        [DllImport("horizon_uwp_engine_bridge.dll", EntryPoint = "horizon_uwp_surface_present",
+            ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
+        private static extern int NativeSurfacePresent(IntPtr host);
+
+        [DllImport("horizon_uwp_engine_bridge.dll", EntryPoint = "horizon_uwp_surface_destroy",
+            ExactSpelling = true, CallingConvention = CallingConvention.Cdecl)]
+        private static extern void NativeSurfaceDestroy(IntPtr host);
 
         public MainPage()
         {
@@ -127,6 +148,7 @@ namespace HorizonXboxStarter
             {
                 try { NativeInputClear(); } catch { }
             }
+            DestroyNativeSurface();
         }
 
         private void InitializeNativeBridge()
@@ -456,6 +478,12 @@ namespace HorizonXboxStarter
             ShowPanel("controls");
         }
 
+        private void NavEngine_Click(object sender, RoutedEventArgs e)
+        {
+            ShowPanel("engine");
+            EngineSurfaceButton.Focus(FocusState.Programmatic);
+        }
+
         private void NavAbout_Click(object sender, RoutedEventArgs e)
         {
             ShowPanel("about");
@@ -734,6 +762,85 @@ namespace HorizonXboxStarter
             BuildKeyBindingEditors();
         }
 
+
+        private void EngineSurfaceButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (!_nativeBridgeAvailable)
+            {
+                EngineSurfaceStatusText.Text = "The Rust bridge DLL is not available in this package.";
+                return;
+            }
+
+            if (_nativeSurfaceHandle != IntPtr.Zero)
+            {
+                int result = NativeSurfacePresent(_nativeSurfaceHandle);
+                EngineSurfaceStatusText.Text = result == 0
+                    ? "DX12 SwapChainPanel frame presented successfully."
+                    : "Present failed with bridge error " + result + ".";
+                return;
+            }
+
+            IntPtr unknown = IntPtr.Zero;
+            IntPtr panelNative = IntPtr.Zero;
+            try
+            {
+                unknown = Marshal.GetIUnknownForObject(EngineSwapChainPanel);
+                Guid panelInterfaceId = new Guid("63AAD0B8-7C24-40FF-85A8-640D944CC325");
+                int queryResult = Marshal.QueryInterface(unknown, ref panelInterfaceId, out panelNative);
+                if (queryResult < 0 || panelNative == IntPtr.Zero)
+                {
+                    EngineSurfaceStatusText.Text =
+                        "Could not obtain ISwapChainPanelNative. HRESULT: 0x" +
+                        queryResult.ToString("X8");
+                    return;
+                }
+
+                uint width = (uint)Math.Max(1.0, EngineSwapChainPanel.ActualWidth);
+                uint height = (uint)Math.Max(1.0, EngineSwapChainPanel.ActualHeight);
+                _nativeSurfaceHandle = NativeSurfaceCreate(panelNative, width, height);
+
+                if (_nativeSurfaceHandle == IntPtr.Zero)
+                {
+                    int error = NativeSurfaceLastError();
+                    EngineSurfaceStatusText.Text =
+                        "DX12 surface creation failed. Bridge error: " + error +
+                        ". Check Xbox graphics/API support.";
+                    return;
+                }
+
+                EngineSurfaceStatusText.Text =
+                    "DX12 SwapChainPanel surface is active. A test frame was presented; Minecraft is not rendering yet.";
+                EngineSurfaceButton.Content = "PRESENT TEST FRAME";
+            }
+            catch (Exception ex)
+            {
+                EngineSurfaceStatusText.Text =
+                    "Surface test could not start: " + ex.GetType().Name + " — " + ex.Message;
+            }
+            finally
+            {
+                if (panelNative != IntPtr.Zero) Marshal.Release(panelNative);
+                if (unknown != IntPtr.Zero) Marshal.Release(unknown);
+            }
+        }
+
+        private void EngineSwapChainPanel_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            if (_nativeSurfaceHandle == IntPtr.Zero) return;
+            uint width = (uint)Math.Max(1.0, e.NewSize.Width);
+            uint height = (uint)Math.Max(1.0, e.NewSize.Height);
+            int result = NativeSurfaceResize(_nativeSurfaceHandle, width, height);
+            if (result != 0)
+                EngineSurfaceStatusText.Text = "Swap-chain resize failed with bridge error " + result + ".";
+        }
+
+        private void DestroyNativeSurface()
+        {
+            if (_nativeSurfaceHandle == IntPtr.Zero) return;
+            try { NativeSurfaceDestroy(_nativeSurfaceHandle); } catch { }
+            _nativeSurfaceHandle = IntPtr.Zero;
+        }
+
         private void ShowPanel(string page)
         {
             _currentPage = page;
@@ -741,16 +848,19 @@ namespace HorizonXboxStarter
             InputPanel.Visibility = page == "input" ? Visibility.Visible : Visibility.Collapsed;
             AboutPanel.Visibility = page == "about" ? Visibility.Visible : Visibility.Collapsed;
             ControlsPanel.Visibility = page == "controls" ? Visibility.Visible : Visibility.Collapsed;
+            EnginePanel.Visibility = page == "engine" ? Visibility.Visible : Visibility.Collapsed;
 
             NavHomeButton.Opacity = page == "home" ? 1.0 : 0.72;
             NavInputButton.Opacity = page == "input" ? 1.0 : 0.72;
             NavControlsButton.Opacity = page == "controls" ? 1.0 : 0.72;
+            NavEngineButton.Opacity = page == "engine" ? 1.0 : 0.72;
             NavAboutButton.Opacity = page == "about" ? 1.0 : 0.72;
 
             HeaderStatusText.Text =
                 page == "home" ? "HOME" :
                 page == "input" ? "INPUT DIAGNOSTICS" :
-                page == "controls" ? "CONTROLS" : "PROJECT INFO";
+                page == "controls" ? "CONTROLS" :
+                page == "engine" ? "DX12 SURFACE TEST" : "PROJECT INFO";
         }
     }
 }

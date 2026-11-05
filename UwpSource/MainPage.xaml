@@ -299,12 +299,21 @@
                                    FontSize="13" FontWeight="Bold" />
                         <TextBlock Text="UWP composition surface" Foreground="{StaticResource MainTextBrush}"
                                    FontSize="30" FontWeight="Bold" />
-                        <TextBlock Text="Starts the pinned Horizon Rust client on a DirectX 12 SwapChainPanel. Use the controls below with a keyboard, mouse or Xbox controller. Minecraft resources must already be available to the app."
+                        <TextBlock Text="Starts the pinned Horizon Rust client on a DirectX 12 SwapChainPanel. First import a prepared resource folder made from your own Minecraft Java Edition files. Online play also needs a legitimate Microsoft/Minecraft sign-in."
                                    Foreground="{StaticResource MutedTextBrush}" FontSize="15"
                                    TextWrapping="Wrap" />
-                        <Button x:Name="EngineSurfaceButton" Content="START HORIZON"
-                                Style="{StaticResource PrimaryButtonStyle}" HorizontalAlignment="Left"
-                                Click="EngineSurfaceButton_Click" />
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <Button x:Name="ImportResourcesButton" Content="IMPORT RESOURCES"
+                                    Style="{StaticResource NavButtonStyle}" HorizontalAlignment="Left"
+                                    Click="ImportResourcesButton_Click" />
+                            <Button x:Name="EngineSurfaceButton" Content="START HORIZON"
+                                    Style="{StaticResource PrimaryButtonStyle}" HorizontalAlignment="Left"
+                                    Click="EngineSurfaceButton_Click" IsEnabled="False" />
+                        </StackPanel>
+                        <TextBlock x:Name="EngineResourcesStatusText"
+                                   Text="Prepared resources have not been imported."
+                                   Foreground="{StaticResource MutedTextBrush}" FontSize="13"
+                                   TextWrapping="Wrap" />
                         <TextBlock x:Name="EngineSurfaceStatusText" Text="Horizon is stopped."
                                    Foreground="{StaticResource MutedTextBrush}" FontSize="13"
                                    TextWrapping="Wrap" />

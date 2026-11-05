@@ -95,51 +95,18 @@ $gfx = Replace-Required $gfx ('async fn open_backend(' + [string][char]10 + '   
 $gfx = Replace-Required $gfx '        Some(window),' '        target.window(),' "instance descriptor display"
 $gfx = Replace-Required $gfx 'match instance.create_surface(window.clone()) {' 'match target.create_surface(&instance) {' "surface creation"
 
-$oldSignature = @'
-    pub async fn new(
-        window: Arc<Window>,
-        offscreen: bool,
-        sprite_pixels: &[u8],
-        sprite_size: u32,
-        sprite_minimum_size: u32,
-        layers: u32,
-        sprite_mips: &[crate::mipmap::Settings],
-        animations: &[SpriteAnimation],
-        hud_atlas: (&[u8], u32, u32),
-        glint: (&[u8], u32, u32),
-        glint_armor: (&[u8], u32, u32),
-        forcefield: (&[u8], u32),
-        panorama_faces: Arc<panorama::Faces>,
-        prepared: Option<PreparedTextures>,
-        previous: Option<&Self>,
-        api: GraphicsApi,
-        translucent_batching: bool,
-        wide_frame: bool,
-        shader_pack: bool,
-    ) -> Result<Self> {
-'@
-$newSignature = @'
-    pub async fn new(
-        window: Arc<Window>,
-        offscreen: bool,
-        sprite_pixels: &[u8],
-        sprite_size: u32,
-        sprite_minimum_size: u32,
-        layers: u32,
-        sprite_mips: &[crate::mipmap::Settings],
-        animations: &[SpriteAnimation],
-        hud_atlas: (&[u8], u32, u32),
-        glint: (&[u8], u32, u32),
-        glint_armor: (&[u8], u32, u32),
-        forcefield: (&[u8], u32),
-        panorama_faces: Arc<panorama::Faces>,
-        prepared: Option<PreparedTextures>,
-        previous: Option<&Self>,
-        api: GraphicsApi,
-        translucent_batching: bool,
-        wide_frame: bool,
-        shader_pack: bool,
-    ) -> Result<Self> {
+$methodStart = $gfx.IndexOf('    pub async fn new(')
+if ($methodStart -lt 0) { throw "Could not find Renderer::new." }
+if (-not $gfx.Contains('async fn new_for_target(')) {
+    $bodyStart = $gfx.IndexOf('        let Opened {', $methodStart)
+    if ($bodyStart -lt 0) { throw "Could not locate the Renderer::new method body." }
+    $head = $gfx.Substring($methodStart, $bodyStart - $methodStart)
+    $signatureClose = $head.LastIndexOf('    ) -> Result<Self> {')
+    if ($signatureClose -lt 0) { throw "Could not locate the end of Renderer::new signature." }
+    $signatureLength = $signatureClose + '    ) -> Result<Self> {'.Length
+    $originalSignature = $head.Substring(0, $signatureLength)
+
+    $wrapper = $originalSignature + @'
         Self::new_for_target(
             RenderTarget::Window(window), offscreen, sprite_pixels, sprite_size,
             sprite_minimum_size, layers, sprite_mips, animations, hud_atlas,
@@ -199,8 +166,8 @@ $newSignature = @'
         shader_pack: bool,
     ) -> Result<Self> {
 '@
-$gfx = Replace-Required $gfx $oldSignature $newSignature "Renderer::new wrapper and UWP constructor"
-
+    $gfx = $gfx.Substring(0, $methodStart) + $wrapper + $gfx.Substring($bodyStart)
+}
 $gfx = Replace-Required $gfx 'None => renderer.instance.create_surface(window.clone())?,' 'None => target.create_surface(&renderer.instance)?,' "renderer reuse surface"
 $gfx = Replace-Required $gfx 'open_device(&window, offscreen, api, layers).await?' 'open_device(&target, offscreen, api, layers).await?' "open device in renderer new"
 $gfx = Replace-Required $gfx '        let size = window.inner_size();' '        let size = target.size();' "target initial size"

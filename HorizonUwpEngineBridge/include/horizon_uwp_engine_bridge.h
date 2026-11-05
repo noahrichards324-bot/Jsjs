@@ -50,6 +50,7 @@ int32_t horizon_uwp_game_start(void *panel, uint32_t width, uint32_t height);
 int32_t horizon_uwp_game_input_push(uint32_t kind, uint32_t code, uint32_t state, float x, float y);
 void horizon_uwp_game_stop(void);
 uint32_t horizon_uwp_game_is_running(void);
+int32_t horizon_uwp_game_last_error(void);
 
 /* Link anchor only; do not call until the UWP-native event loop is implemented. */
 uintptr_t horizon_uwp_engine_entrypoint_address(void);

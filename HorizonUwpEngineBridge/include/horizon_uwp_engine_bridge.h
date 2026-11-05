@@ -32,6 +32,7 @@ enum HorizonUwpInputEventKind {
 };
 
 uint32_t horizon_uwp_engine_bridge_abi_version(void);
+uint32_t horizon_uwp_input_event_size(void);
 uint32_t horizon_uwp_input_pending(void);
 int32_t horizon_uwp_input_push(uint32_t kind, uint32_t code, uint32_t state, float x, float y);
 int32_t horizon_uwp_input_pop(HorizonUwpInputEvent *out_event);

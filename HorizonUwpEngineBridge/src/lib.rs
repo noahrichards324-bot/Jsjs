@@ -8,6 +8,7 @@
 //! anchor only and must not be called by the current UWP shell.
 
 use std::collections::VecDeque;
+use std::ffi::c_void;
 use std::sync::{Mutex, OnceLock};
 
 const INPUT_QUEUE_CAPACITY: usize = 4096;
@@ -148,6 +149,212 @@ pub extern "C" fn horizon_uwp_input_pending() -> u32 {
 pub extern "C" fn horizon_uwp_engine_entrypoint_address() -> usize {
     horizon_client::entry::main as usize
 }
+
+
+/// A native DX12 surface attached to a XAML SwapChainPanel.
+///
+/// This is a renderer-host smoke test. It does not yet execute Horizon's
+/// world renderer; it proves that the UWP panel can own a wgpu swap chain
+/// and receive presented frames.
+struct UwpSurfaceHost {
+    _instance: wgpu::Instance,
+    surface: wgpu::Surface<'static>,
+    adapter: wgpu::Adapter,
+    device: wgpu::Device,
+    queue: wgpu::Queue,
+    config: wgpu::SurfaceConfiguration,
+}
+
+impl UwpSurfaceHost {
+    fn create(panel: *mut c_void, width: u32, height: u32) -> Result<Self, i32> {
+        if panel.is_null() || width == 0 || height == 0 {
+            return Err(-1);
+        }
+
+        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::DX12,
+            ..Default::default()
+        });
+
+        // The XAML host passes an ISwapChainPanelNative interface pointer.
+        // wgpu's DX12 HAL AddRefs and retains that COM interface for the
+        // lifetime of the created surface.
+        let surface = unsafe {
+            instance.create_surface_unsafe(wgpu::SurfaceTargetUnsafe::SwapChainPanel(panel))
+        }
+        .map_err(|_| -2)?;
+
+        let adapter = pollster::block_on(instance.request_adapter(
+            &wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::HighPerformance,
+                compatible_surface: Some(&surface),
+                force_fallback_adapter: false,
+            },
+        ))
+        .map_err(|_| -3)?;
+
+        let descriptor = wgpu::DeviceDescriptor {
+            label: Some("Horizon Xbox UWP surface probe"),
+            required_features: wgpu::Features::empty(),
+            required_limits: wgpu::Limits::default(),
+            memory_hints: wgpu::MemoryHints::MemoryUsage,
+            ..Default::default()
+        };
+
+        let (device, queue) = pollster::block_on(adapter.request_device(&descriptor))
+            .map_err(|_| -4)?;
+
+        let mut config = surface
+            .get_default_config(&adapter, width.max(1), height.max(1))
+            .ok_or(-5)?;
+        config.present_mode = wgpu::PresentMode::Fifo;
+        config.desired_maximum_frame_latency = 2;
+        surface.configure(&device, &config);
+
+        let host = Self {
+            _instance: instance,
+            surface,
+            adapter,
+            device,
+            queue,
+            config,
+        };
+
+        host.present_test_frame()?;
+        Ok(host)
+    }
+
+    fn present_test_frame(&self) -> Result<(), i32> {
+        let frame = self.surface.get_current_texture().map_err(|_| -6)?;
+        let view = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("Horizon UWP surface probe"),
+        });
+
+        {
+            let _pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Horizon UWP surface probe clear"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    depth_slice: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: 0.035,
+                            g: 0.09,
+                            b: 0.07,
+                            a: 1.0,
+                        }),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                ..Default::default()
+            });
+        }
+
+        self.queue.submit(Some(encoder.finish()));
+        frame.present();
+        Ok(())
+    }
+
+    fn resize(&mut self, width: u32, height: u32) -> Result<(), i32> {
+        if width == 0 || height == 0 {
+            return Ok(());
+        }
+        self.config.width = width;
+        self.config.height = height;
+        self.surface.configure(&self.device, &self.config);
+        self.present_test_frame()
+    }
+}
+
+/// Create and present a DX12 composition swap chain on a UWP SwapChainPanel.
+///
+/// Returns an opaque host handle, or null on failure. The host owns the wgpu
+/// instance, surface, adapter, device and queue. The input pointer must be an
+/// ISwapChainPanelNative COM interface pointer obtained from the XAML panel.
+///
+/// # Safety
+/// `panel` must be a live ISwapChainPanelNative interface pointer for the
+/// duration of the call. wgpu retains its own COM reference for the surface.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn horizon_uwp_surface_create(
+    panel: *mut c_void,
+    width: u32,
+    height: u32,
+) -> *mut c_void {
+    match UwpSurfaceHost::create(panel, width, height) {
+        Ok(host) => Box::into_raw(Box::new(host)).cast(),
+        Err(code) => {
+            LAST_SURFACE_ERROR.store(code, std::sync::atomic::Ordering::Relaxed);
+            std::ptr::null_mut()
+        }
+    }
+}
+
+/// Last negative surface creation/error code for diagnostics.
+static LAST_SURFACE_ERROR: std::sync::atomic::AtomicI32 =
+    std::sync::atomic::AtomicI32::new(0);
+
+#[unsafe(no_mangle)]
+pub extern "C" fn horizon_uwp_surface_last_error() -> i32 {
+    LAST_SURFACE_ERROR.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Resize the UWP composition swap chain and present a new diagnostic frame.
+///
+/// # Safety
+/// `host` must be a live handle returned by `horizon_uwp_surface_create`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn horizon_uwp_surface_resize(
+    host: *mut c_void,
+    width: u32,
+    height: u32,
+) -> i32 {
+    if host.is_null() {
+        return -1;
+    }
+    let host = unsafe { &mut *host.cast::<UwpSurfaceHost>() };
+    host.resize(width, height).map_or_else(
+        |code| {
+            LAST_SURFACE_ERROR.store(code, std::sync::atomic::Ordering::Relaxed);
+            code
+        },
+        |_| 0,
+    )
+}
+
+/// Present another diagnostic frame on the UWP composition swap chain.
+///
+/// # Safety
+/// `host` must be a live handle returned by `horizon_uwp_surface_create`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn horizon_uwp_surface_present(host: *mut c_void) -> i32 {
+    if host.is_null() {
+        return -1;
+    }
+    let host = unsafe { &mut *host.cast::<UwpSurfaceHost>() };
+    host.present_test_frame().map_or_else(
+        |code| {
+            LAST_SURFACE_ERROR.store(code, std::sync::atomic::Ordering::Relaxed);
+            code
+        },
+        |_| 0,
+    )
+}
+
+/// Destroy a UWP swap-chain host created by `horizon_uwp_surface_create`.
+///
+/// # Safety
+/// `host` must be null or a live handle returned by the create function.
+/// A non-null handle must be destroyed exactly once.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn horizon_uwp_surface_destroy(host: *mut c_void) {
+    if !host.is_null() {
+        drop(unsafe { Box::from_raw(host.cast::<UwpSurfaceHost>()) });
+    }
+}
+
 
 #[cfg(test)]
 mod tests {

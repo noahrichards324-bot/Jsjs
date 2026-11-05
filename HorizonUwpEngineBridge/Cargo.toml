@@ -22,3 +22,10 @@ libmimalloc-sys = { path = "../HorizonEngine/third_party/libmimalloc-sys" }
 [profile.release]
 panic = "abort"
 lto = "thin"
+
+[profile.fast]
+inherits = "release"
+panic = "abort"
+lto = false
+codegen-units = 16
+incremental = true

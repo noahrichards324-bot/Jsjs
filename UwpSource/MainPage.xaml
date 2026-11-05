@@ -313,7 +313,6 @@
                             BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="1"
                             CornerRadius="14" Padding="2">
                         <SwapChainPanel x:Name="EngineSwapChainPanel"
-                                        Background="Transparent"
                                         SizeChanged="EngineSwapChainPanel_SizeChanged" />
                     </Border>
                 </Grid>

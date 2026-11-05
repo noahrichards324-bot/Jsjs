@@ -1,4 +1,8 @@
 name: Build UWP starter
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 
 on:
   workflow_dispatch:
@@ -105,12 +109,12 @@ jobs:
       - name: Build and package Horizon native bridge
         shell: pwsh
         run: |
-          cargo +nightly build --manifest-path HorizonUwpEngineBridge/Cargo.toml --target x86_64-uwp-windows-msvc -Z build-std=std,panic_abort --release
+          cargo +nightly build --manifest-path HorizonUwpEngineBridge/Cargo.toml --target x86_64-uwp-windows-msvc -Z build-std=std,panic_abort --profile fast
           if ($LASTEXITCODE -ne 0) {
             throw "Horizon's native UWP bridge DLL failed to build."
           }
 
-          $dll = Join-Path $env:GITHUB_WORKSPACE "HorizonUwpEngineBridge/target/x86_64-uwp-windows-msvc/release/horizon_uwp_engine_bridge.dll"
+          $dll = Join-Path $env:GITHUB_WORKSPACE "HorizonUwpEngineBridge/target/x86_64-uwp-windows-msvc/fast/horizon_uwp_engine_bridge.dll"
           if (-not (Test-Path -LiteralPath $dll)) {
             throw "The native UWP bridge DLL was not produced: $dll"
           }
